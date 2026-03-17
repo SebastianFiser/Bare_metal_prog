@@ -56,15 +56,20 @@ static inline void sys_exit(int code) {
 }
 
 void _start(void) {
-    //const char msg[] = "Vlozte vase jmeno (max 64 znaku)\n";
-    //sys_write(1, msg, sizeof(msg) - 1);
-    //char buffer[64];
-    //isize n = sys_read(0, buffer, 64);
-    //const char msg2[] = "Vase jmeno je : ";
-    //sys_write(1, msg2, sizeof(msg2) - 1);
-    //sys_write(1, buffer, n);
+    //Zprava na zeptaní ohledně poctu jmena
+    const char msg[] = "Vlozte vase jmeno (max 64 znaku)\n";
+    sys_write(1, msg, sizeof(msg) - 1);
+    //make bufer and read name from user input
+    char write_buffer[64];
+    isize n1 = sys_read(0, write_buffer, 64);
+    const char msg2[] = "Vase jmeno je : ";
+    //write name back to user
+    sys_write(1, msg2, sizeof(msg2) - 1);
+    sys_write(1, write_buffer, n1);
+    //open file and read its content
     isize fd = sys_open("/home/sebastian/Bare_metal_prog/nolib_projects/text.txt", 0, 0);
     if (fd < 0) sys_exit(1);
+    //write file contents into terminal 
     char buffer[1024];
     isize n = sys_read(fd, buffer, 1024);
     sys_write(1, buffer, n);
