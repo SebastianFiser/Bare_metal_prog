@@ -1,4 +1,5 @@
 1**Dynamic file reader**
--not limit filesize to 1024 kb
-2**Shell like interface**
+-not limit filesize to 1024 bytes (done)
+2**Other stuff**
+3**Shell like interface**
 -not needing to pass command with the codestart
