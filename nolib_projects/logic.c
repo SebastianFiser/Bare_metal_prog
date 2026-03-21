@@ -92,11 +92,21 @@ static inline isize sys_orp(const char *filepath) {
         sys_exit(1);
     }
 
-    char fileread[1024];
-    isize n = sys_read(fd, fileread, 1024);
-    if (n > 0) sys_write(1, fileread, (usize)n);
+    char buf[1024];
+    //customize function to read file content and print it to stdout
+    for (;;) {
+        isize n = sys_read(fd, buf, sizeof(buf));
+        if (n < 0)sys_exit(1); 
+        if (n == 0) break;
+        
+        isize off = 0;
+        while (off < n) {
+            isize w = sys_write(1, buf + off, (usize)(n - off));
+            if (w <= 0) sys_exit(1);
+            off += w;
+        }
+    }
     sys_close((int)fd);
-    return n;
 }
 
 __attribute__((noreturn))
