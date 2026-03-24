@@ -9,7 +9,7 @@ CFLAGS="-std=c11 -O2 -g3 -Wall -Wextra --target=riscv32-unknown-elf -fuse-ld=lld
 
 # Build the kernel
 $CC $CFLAGS -Wl,-Tkernel.ld -Wl,-Map=kernel.map -o kernel.elf \
-    kernel.c common.c video.c
+    kernel.c common.c #video.c
 
 # Start QEMU
 $QEMU -machine virt -device virtio-gpu-device -display gtk -bios default -serial mon:stdio --no-reboot \

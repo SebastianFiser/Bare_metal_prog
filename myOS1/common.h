@@ -6,4 +6,3 @@
 #define va_arg   __builtin_va_arg
 
 void printf(const char *fmt, ...);
-void video_init(void);
