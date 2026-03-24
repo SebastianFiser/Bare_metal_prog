@@ -83,7 +83,7 @@ void *memset(void *buf, char c, size_t n) {
 
 //string operations *strcpy and strcmp
 
-void *strcpy(char *dst, const char *src) {
+char *strcpy(char *dst, const char *src) {
     char *d = dst;
     while (*src)
         *d++ = *src++;
