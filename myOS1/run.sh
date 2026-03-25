@@ -1,7 +1,8 @@
 #!/bin/bash
 set -xue
-
+DEV=DUMB_NIGGA
 QEMU=qemu-system-riscv32
+echo $DEV
 
 # Auto-select display backend: GTK only with an available GUI session.
 if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then

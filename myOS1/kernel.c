@@ -1,8 +1,23 @@
-extern char __bss[], __bss_end[], __stack_top[];
+extern char __bss[], __bss_end[], __stack_top[], __free_ram[], __free_ram_end[];
 
 #include "common.h"
 #include "kernel.h"
 //#include "video.h"
+
+paddr_t alloc_pages(uint32_t n) {
+    static paddr_t next_paddr = (paddr_t) __free_ram;
+    paddr_t paddr = next_paddr;
+    next_paddr += n * PAGE_SIZE;
+
+    if (next_paddr > (paddr_t) __free_ram_end) {
+        PANIC("Out of memory");
+    }
+
+    memset((void *) paddr, 0, n * PAGE_SIZE);
+    return paddr;
+
+    //linear allocator, cant free, has to be replaced in the future for bitmap-based one
+}
 
 struct sbiret sbi_call(long arg0, long arg1, long arg2, long arg3, long arg4, long arg5, long fid, long eid) {
     register long a0 __asm__("a0") = arg0;
@@ -132,13 +147,12 @@ void handle_trap(struct trap_frame *f) {
 }
 
 void kernel_main(void) {
-    WRITE_CSR(stvec, (uint32_t) kernel_entry);
-    __asm__ __volatile__("unimp");
-    //video_init();
-    //printf("%s", "Kernel response\n");
-    //printf("1 + 2 = %d, %x\n", 1 + 2, 0x1234abcd);
-    //PANIC("BOOTED!");
-    //shutdown();
+
+    paddr_t paddr0 = alloc_pages(2);
+    paddr_t paddr1 = alloc_pages(1);
+    printf("Allocated pages at physical addresses: %x, %x\n", paddr0, paddr1);
+    PANIC("BOOTED!");
+    shutdown();
     for (;;) {
     __asm__ volatile("wfi");
     }
