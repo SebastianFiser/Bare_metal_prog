@@ -1,0 +1,23 @@
+# Build artifacts
+build/
+iso/
+*.o
+*.elf
+*.iso
+
+# OS cache
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.cproject
+
+# Temporary files
+*.tmp
+*.log
