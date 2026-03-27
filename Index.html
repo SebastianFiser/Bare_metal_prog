@@ -10,17 +10,17 @@
 
     <div id="screen_container" style="display:flex; justify-content:center; align-items:center; height:100vh;">
         <!-- Zde se vykreslí obrazovka vašeho OS -->
-        <div id="screen" style="white-space: pre; font-family: Courier, monospace; line-height: 14px;"></div>
+        <div style="white-space: pre; font: 14px monospace; line-height: 14px;"></div>
+        <canvas style="display: none;" aria-label="Emulator display"></canvas>
     </div>
 
     <script>
     window.onload = function() {
         var emulator = new V86Starter({
             wasm_path: "https://copy.sh/v86/build/v86.wasm",
-            memory_size: 512 * 1024 * 1024, // 512 MB RAM (pro GUI ideální)
-            vga_as_canvas: true,
-            screen_container: document.getElementById("screen"),
-            network_relay_url: "wss://relay.widgetry.org/", // Volitelné pro internet
+            memory_size: 32 * 1024 * 1024,
+            vga_memory_size: 2 * 1024 * 1024,
+            screen_container: document.getElementById("screen_container"),
             cdrom: {
                 url: "./os.iso",
             },
