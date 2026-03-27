@@ -46,13 +46,13 @@ jobs:
 
       - name: Download v86 assets
         run: |
-          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/v86_all.js" \
-               -o _site/v86_all.js
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/libv86.js" \
+               -o _site/libv86.js
           curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/v86.wasm" \
                -o _site/v86.wasm
-          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/bios/seabios.bin" \
+          curl -fsSL "https://raw.githubusercontent.com/copy/v86/master/bios/seabios.bin" \
                -o _site/seabios.bin
-          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/bios/vgabios.bin" \
+          curl -fsSL "https://raw.githubusercontent.com/copy/v86/master/bios/vgabios.bin" \
                -o _site/vgabios.bin
           curl -fsSL "https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.9/coi-serviceworker.min.js" \
                -o _site/coi-serviceworker.js

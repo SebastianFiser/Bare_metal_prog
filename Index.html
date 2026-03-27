@@ -7,7 +7,7 @@
          enabling SharedArrayBuffer on GitHub Pages (required by v86) -->
     <script src="coi-serviceworker.js"></script>
     <!-- v86 emulator served locally (downloaded during CI build) -->
-    <script src="v86_all.js"></script>
+    <script src="libv86.js"></script>
 </head>
 <body style="margin:0; background-color:#222; color:white; font-family:sans-serif; overflow:hidden;">
 
@@ -19,7 +19,7 @@
 
     <script>
     window.onload = function() {
-        var emulator = new V86Starter({
+        var emulator = new V86({
             wasm_path: "v86.wasm",
             memory_size: 32 * 1024 * 1024,
             vga_memory_size: 2 * 1024 * 1024,
