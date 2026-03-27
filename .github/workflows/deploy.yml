@@ -1,20 +1,69 @@
-# Updated deploy.yml
-
-name: Deploy
+name: Build and Deploy
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
-      - name: Install curl
-        run: sudo apt-get install curl
-      - name: Execute curl command
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
         run: |
-          curl -L https://unpkg.com/coi-serviceworker@0.1.9 -o coi-serviceworker.min.js
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gcc-multilib \
+            libc6-dev-i386 \
+            nasm \
+            grub-pc-bin \
+            grub-common \
+            xorriso \
+            mtools \
+            binutils
+
+      - name: Build kernel and ISO
+        run: |
+          set -e
+          mkdir -p iso/boot/grub build
+          nasm -f elf32 boot.asm -o build/boot.o
+          gcc -ffreestanding -m32 -c kernel.c -o build/kernel.o
+          ld -m elf_i386 -T linker.ld -o build/kernel.elf \
+              build/boot.o build/kernel.o
+          cp build/kernel.elf iso/boot/
+          cp grub.cfg iso/boot/grub/grub.cfg
+          grub-mkrescue -o os.iso iso/
+
+      - name: Prepare site directory
+        run: mkdir -p _site
+
+      - name: Download v86 assets
+        run: |
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/v86_all.js" \
+               -o _site/v86_all.js
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/v86.wasm" \
+               -o _site/v86.wasm
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/bios/seabios.bin" \
+               -o _site/seabios.bin
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/bios/vgabios.bin" \
+               -o _site/vgabios.bin
+          curl -fsSL "https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.9/coi-serviceworker.min.js" \
+               -o _site/coi-serviceworker.js
+
+      - name: Copy site files
+        run: |
+          cp Index.html _site/index.html
+          cp os.iso _site/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site

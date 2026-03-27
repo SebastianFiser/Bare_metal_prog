@@ -9,8 +9,9 @@ header_start:
     dd header_end - header_start
     dd -(0xE85250D6 + 0 + (header_end - header_start))
 
-    dd 0
-    dd 0
+    dw 0            ; end tag type
+    dw 0            ; end tag flags
+    dd 8            ; end tag size
 header_end:
 
 
