@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OS Demo - Live in Browser</title>
-    <!-- coi-serviceworker sets COOP/COEP headers via a service worker,
-         enabling SharedArrayBuffer on GitHub Pages (required by v86) -->
-    <script src="coi-serviceworker.js"></script>
     <!-- v86 emulator served locally (downloaded during CI build) -->
     <script src="libv86.js"></script>
 </head>
@@ -89,20 +86,7 @@
         });
 
         window.addEventListener("load", function () {
-            if (window.crossOriginIsolated) {
-                setStatus("cross-origin isolation aktivní, startuji...");
-                startEmulator();
-                return;
-            }
-
-            setStatus("aktivuji COOP/COEP service worker...");
-            setTimeout(function () {
-                if (!window.crossOriginIsolated) {
-                    showError("Stránka není cross-origin isolated. Zkus reload stránky (Ctrl+F5). Pokud nepomůže, zkontroluj Pages deploy.");
-                    return;
-                }
-                startEmulator();
-            }, 1200);
+            startEmulator();
         });
     })();
     </script>
