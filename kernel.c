@@ -38,6 +38,9 @@ void write_text(unsigned int x, unsigned int y, unsigned char color, const char*
 }
 
 void kernel_main(void) {
-    clear_screen(0x0F);
-    write_text(0, 0, 0x0F, "Hello, World!");
+    clear_screen(0x4F);
+    write_text(0, 0, 0x4F, "Hello, World!, welcome to my kernel!");
+    write_text(0, 1, 0x4F, "This is a simple kernel written in C.");
+    write_text(0, 2, 0x4F, "This idea was supported by HackClub!");
+    write_text(0, 3, 0x4F, "Right now i cant do anything, but my guy is working on it!");
 }
