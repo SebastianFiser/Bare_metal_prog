@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>OS Demo - Live in Browser</title>
+    <!-- coi-serviceworker sets COOP/COEP headers via a service worker,
+         enabling SharedArrayBuffer on GitHub Pages (required by v86) -->
+    <script src="coi-serviceworker.js"></script>
+    <!-- v86 emulator served locally (downloaded during CI build) -->
+    <script src="libv86.js"></script>
+</head>
+<body style="margin:0; background-color:#222; color:white; font-family:sans-serif; overflow:hidden;">
+
+    <div id="screen_container" style="display:flex; justify-content:center; align-items:center; height:100vh;">
+        <!-- Zde se vykreslí obrazovka vašeho OS -->
+        <div style="white-space: pre; font: 14px monospace; line-height: 14px;"></div>
+        <canvas style="display: none;" aria-label="Emulator display"></canvas>
+    </div>
+
+    <script>
+    window.onload = function() {
+        var emulator = new V86({
+            wasm_path: "v86.wasm",
+            memory_size: 32 * 1024 * 1024,
+            vga_memory_size: 2 * 1024 * 1024,
+            screen_container: document.getElementById("screen_container"),
+            cdrom: {
+                url: "./os.iso",
+            },
+            autostart: true,
+            bios: { url: "seabios.bin" },
+            vga_bios: { url: "vgabios.bin" },
+        });
+    };
+    </script>
+</body>
+</html>
