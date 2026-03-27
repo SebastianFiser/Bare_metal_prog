@@ -1,0 +1,73 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            gcc-multilib \
+            libc6-dev-i386 \
+            nasm \
+            grub-pc-bin \
+            grub-common \
+            xorriso \
+            mtools \
+            binutils
+
+      - name: Build os.iso
+        run: |
+          set -e
+          mkdir -p iso/boot/grub build
+
+          nasm -f elf32 boot.asm -o build/boot.o
+          gcc -ffreestanding -m32 -c kernel.c -o build/kernel.o
+          ld -m elf_i386 -T linker.ld -o build/kernel.elf \
+              build/boot.o build/kernel.o
+
+          cp build/kernel.elf iso/boot/
+          cp grub.cfg iso/boot/grub/grub.cfg
+
+          grub-mkrescue -o os.iso iso/
+
+      - name: Prepare GitHub Pages site
+        run: |
+          mkdir -p _site
+          cp Index.html _site/index.html
+          cp os.iso _site/os.iso
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
