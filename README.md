@@ -12,6 +12,14 @@ The demo is automatically built and deployed via GitHub Actions whenever changes
 1. Install dependencies: `bash download_dep.sh`
 2. Build and run: `bash run.sh`
 
+## REPOSITORY STRUCTURE
+- `src/boot/boot.asm` - boot entry + multiboot2 header
+- `src/kernel/kernel.c` - kernel C code
+- `src/kernel/common.c` and `src/kernel/common.h` - shared kernel helpers
+- `config/linker/linker.ld` - linker script
+- `config/grub/grub.cfg` - GRUB boot config
+- `run.sh` - local build + run script
+
 ## HOW TO RUN MANUALLY
 1. Download `os.iso` from the [GitHub Pages site](https://sebastianfiser.github.io/Bare_metal_prog/os.iso)
 2. Use an emulator like [copy.sh/v86](https://copy.sh/v86/), place the ISO in the CD image slot, and click start

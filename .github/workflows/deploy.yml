@@ -33,23 +33,27 @@ jobs:
         run: |
           set -e
           mkdir -p iso/boot/grub build
-          nasm -f elf32 boot.asm -o build/boot.o
-          gcc -ffreestanding -m32 -c kernel.c -o build/kernel.o
-          ld -m elf_i386 -T linker.ld -o build/kernel.elf \
+          nasm -f elf32 src/boot/boot.asm -o build/boot.o
+          gcc -ffreestanding -m32 -c src/kernel/kernel.c -o build/kernel.o
+          ld -m elf_i386 -T config/linker/linker.ld -o build/kernel.elf \
               build/boot.o build/kernel.o
           cp build/kernel.elf iso/boot/
-          cp grub.cfg iso/boot/grub/grub.cfg
+          cp config/grub/grub.cfg iso/boot/grub/grub.cfg
           grub-mkrescue -o os.iso iso/
 
       - name: Prepare site directory
-        run: mkdir -p _site
+        run: |
+          mkdir -p _site
+          touch _site/.nojekyll
 
       - name: Download v86 assets
         run: |
-          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/libv86.js" \
+          V86_VERSION="0.5.319"
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86@${V86_VERSION}/build/libv86.js" \
                -o _site/libv86.js
-          curl -fsSL "https://cdn.jsdelivr.net/npm/v86/build/v86.wasm" \
+          curl -fsSL "https://cdn.jsdelivr.net/npm/v86@${V86_VERSION}/build/v86.wasm" \
                -o _site/v86.wasm
+          # BIOS files are not shipped in npm package v86, keep official upstream source.
           curl -fsSL "https://raw.githubusercontent.com/copy/v86/master/bios/seabios.bin" \
                -o _site/seabios.bin
           curl -fsSL "https://raw.githubusercontent.com/copy/v86/master/bios/vgabios.bin" \

@@ -2,6 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OS Demo - Live in Browser</title>
     <!-- coi-serviceworker sets COOP/COEP headers via a service worker,
          enabling SharedArrayBuffer on GitHub Pages (required by v86) -->
@@ -9,29 +10,96 @@
     <!-- v86 emulator served locally (downloaded during CI build) -->
     <script src="libv86.js"></script>
 </head>
-<body style="margin:0; background-color:#222; color:white; font-family:sans-serif; overflow:hidden;">
+<body style="margin:0; background-color:#222; color:white; font-family:sans-serif;">
 
-    <div id="screen_container" style="display:flex; justify-content:center; align-items:center; height:100vh;">
+    <div style="padding:12px; background:#111; border-bottom:1px solid #444; font-size:14px;">
+        <strong>Live Demo status:</strong>
+        <span id="status">inicializuji...</span>
+    </div>
+
+    <div id="screen_container" style="display:flex; justify-content:center; align-items:center; height:calc(100vh - 46px);">
         <!-- Zde se vykreslí obrazovka vašeho OS -->
         <div style="white-space: pre; font: 14px monospace; line-height: 14px;"></div>
         <canvas style="display: none;" aria-label="Emulator display"></canvas>
     </div>
 
+    <pre id="error_log" style="display:none; margin:0; padding:12px; background:#2b0000; color:#ffb3b3; border-top:1px solid #5a1f1f; white-space:pre-wrap;"></pre>
+
     <script>
-    window.onload = function() {
-        var emulator = new V86({
-            wasm_path: "v86.wasm",
-            memory_size: 32 * 1024 * 1024,
-            vga_memory_size: 2 * 1024 * 1024,
-            screen_container: document.getElementById("screen_container"),
-            cdrom: {
-                url: "./os.iso",
-            },
-            autostart: true,
-            bios: { url: "seabios.bin" },
-            vga_bios: { url: "vgabios.bin" },
+    (function () {
+        var statusEl = document.getElementById("status");
+        var errorEl = document.getElementById("error_log");
+
+        function setStatus(message) {
+            statusEl.textContent = message;
+        }
+
+        function showError(message) {
+            errorEl.style.display = "block";
+            errorEl.textContent = message;
+            setStatus("chyba");
+        }
+
+        function startEmulator() {
+            if (typeof V86 === "undefined") {
+                showError("libv86.js se nenačetl. Zkontroluj deploy artefakty na GitHub Pages.");
+                return;
+            }
+
+            setStatus("spouštím emulátor...");
+
+            try {
+                var emulator = new V86({
+                    wasm_path: "v86.wasm",
+                    memory_size: 32 * 1024 * 1024,
+                    vga_memory_size: 2 * 1024 * 1024,
+                    screen_container: document.getElementById("screen_container"),
+                    cdrom: {
+                        url: "./os.iso",
+                    },
+                    autostart: true,
+                    bios: { url: "seabios.bin" },
+                    vga_bios: { url: "vgabios.bin" },
+                });
+
+                if (emulator && typeof emulator.add_listener === "function") {
+                    emulator.add_listener("emulator-ready", function () {
+                        setStatus("emulátor běží");
+                    });
+                } else {
+                    setStatus("emulátor spuštěn");
+                }
+            } catch (err) {
+                showError("Start emulátoru selhal: " + (err && err.message ? err.message : String(err)));
+            }
+        }
+
+        window.addEventListener("error", function (event) {
+            showError("JavaScript chyba: " + event.message);
         });
-    };
+
+        window.addEventListener("unhandledrejection", function (event) {
+            var reason = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+            showError("Promise chyba: " + reason);
+        });
+
+        window.addEventListener("load", function () {
+            if (window.crossOriginIsolated) {
+                setStatus("cross-origin isolation aktivní, startuji...");
+                startEmulator();
+                return;
+            }
+
+            setStatus("aktivuji COOP/COEP service worker...");
+            setTimeout(function () {
+                if (!window.crossOriginIsolated) {
+                    showError("Stránka není cross-origin isolated. Zkus reload stránky (Ctrl+F5). Pokud nepomůže, zkontroluj Pages deploy.");
+                    return;
+                }
+                startEmulator();
+            }, 1200);
+        });
+    })();
     </script>
 </body>
 </html>
