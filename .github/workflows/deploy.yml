@@ -54,7 +54,7 @@ jobs:
                -o _site/seabios.bin
           curl -fsSL "https://raw.githubusercontent.com/copy/v86/master/bios/vgabios.bin" \
                -o _site/vgabios.bin
-          curl -fsSL "https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.9/coi-serviceworker.min.js" \
+          curl -fsSL "https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.7/coi-serviceworker.min.js" \
                -o _site/coi-serviceworker.js
 
       - name: Copy site files
