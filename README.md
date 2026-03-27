@@ -7,5 +7,5 @@ place the iso file in CD image space, and emulate !!
 ## 🎮 Demo
 You can try this OS directly in your browser without installing anything!
 
-[![Run in v86](https://img.shields.io/badge/Run_in-v86-blue?style=for-the-badge&logo=virtualbox)]([https://copy.sh/v86/?profile=v86&m=256&vga=true&cdrom=https://cdn.hackclub.com/019d2fef-cbac-7f90-ba73-38c7e81c4079/os.iso](https://copy.sh/v86/?profile=v86&m=256&vga=true&cdrom=https://cdn.hackclub.com/019d2fef-cbac-7f90-ba73-38c7e81c4079/os.iso))
+[![Run in v86](https://img.shields.io/badge/Run_in-v86-blue?style=for-the-badge&logo=virtualbox)]([https://copy.sh/v86/?profile=v86&m=256&vga=true&cdrom=https://cdn.hackclub.com/019d2fef-cbac-7f90-ba73-38c7e81c4079/os.iso])
 
