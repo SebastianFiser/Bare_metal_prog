@@ -50,9 +50,18 @@ jobs:
 
           grub-mkrescue -o os.iso iso/
 
-      - name: Prepare GitHub Pages site
+      - name: Download v86 assets
         run: |
           mkdir -p _site
+          curl -fsSL https://copy.sh/v86/build/v86_all.js   -o _site/v86_all.js
+          curl -fsSL https://copy.sh/v86/build/v86.wasm      -o _site/v86.wasm
+          curl -fsSL https://copy.sh/v86/bios/seabios.bin    -o _site/seabios.bin
+          curl -fsSL https://copy.sh/v86/bios/vgabios.bin    -o _site/vgabios.bin
+          curl -fsSL https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.9/coi-serviceworker.min.js \
+               -o _site/coi-serviceworker.js
+
+      - name: Prepare GitHub Pages site
+        run: |
           cp Index.html _site/index.html
           cp os.iso _site/os.iso
 
