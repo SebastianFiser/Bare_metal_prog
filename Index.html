@@ -41,15 +41,10 @@
         }
 
         function startEmulator() {
-            if (typeof V86 === "undefined") {
-                showError("libv86.js se nenačetl. Zkontroluj deploy artefakty na GitHub Pages.");
-                return;
-            }
-
             setStatus("spouštím emulátor...");
 
             try {
-                var emulator = new V86({
+                var options = {
                     wasm_path: "v86.wasm",
                     memory_size: 32 * 1024 * 1024,
                     vga_memory_size: 2 * 1024 * 1024,
@@ -60,7 +55,17 @@
                     autostart: true,
                     bios: { url: "seabios.bin" },
                     vga_bios: { url: "vgabios.bin" },
-                });
+                };
+
+                var emulator;
+                if (typeof V86 !== "undefined") {
+                    emulator = new V86(options);
+                } else if (typeof V86Starter !== "undefined") {
+                    emulator = new V86Starter(options);
+                } else {
+                    showError("Ani V86 ani V86Starter nejsou dostupne. libv86.js se pravdepodobne nenasel nebo je nekompatibilni.");
+                    return;
+                }
 
                 if (emulator && typeof emulator.add_listener === "function") {
                     emulator.add_listener("emulator-ready", function () {
