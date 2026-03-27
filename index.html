@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>OS Demo - Live in Browser</title>
+    <!-- Načtení v86 emulátoru přímo z jejich CDN -->
+    <script src="https://copy.sh/v86/build/v86_all.js"></script>
+</head>
+<body style="margin:0; background-color:#222; color:white; font-family:sans-serif; overflow:hidden;">
+
+    <div id="screen_container" style="display:flex; justify-content:center; align-items:center; height:100vh;">
+        <!-- Zde se vykreslí obrazovka vašeho OS -->
+        <div id="screen" style="white-space: pre; font-family: Courier, monospace; line-height: 14px;"></div>
+    </div>
+
+    <script>
+    window.onload = function() {
+        var emulator = new V86Starter({
+            wasm_path: "https://copy.sh/v86/build/v86.wasm",
+            memory_size: 512 * 1024 * 1024, // 512 MB RAM (pro GUI ideální)
+            vga_as_canvas: true,
+            screen_container: document.getElementById("screen"),
+            network_relay_url: "wss://relay.widgetry.org/", // Volitelné pro internet
+            cdrom: {
+                url: "https://cdn.hackclub.com/019d2fef-cbac-7f90-ba73-38c7e81c4079/os.iso",
+            },
+            autostart: true,
+            bios: { url: "https://copy.sh/v86/bios/seabios.bin" },
+            vga_bios: { url: "https://copy.sh/v86/bios/vgabios.bin" },
+        });
+    };
+    </script>
+</body>
+</html>
