@@ -35,8 +35,9 @@ jobs:
           mkdir -p iso/boot/grub build
           nasm -f elf32 src/boot/boot.asm -o build/boot.o
           gcc -ffreestanding -m32 -c src/kernel/kernel.c -o build/kernel.o
+          gcc -ffreestanding -m32 -c src/kernel/common.c -o build/common.o
           ld -m elf_i386 -T config/linker/linker.ld -o build/kernel.elf \
-              build/boot.o build/kernel.o
+              build/boot.o build/kernel.o build/common.o
           cp build/kernel.elf iso/boot/
           cp config/grub/grub.cfg iso/boot/grub/grub.cfg
           grub-mkrescue -o os.iso iso/
@@ -58,6 +59,8 @@ jobs:
                -o _site/seabios.bin
           curl -fsSL "https://raw.githubusercontent.com/copy/v86/master/bios/vgabios.bin" \
                -o _site/vgabios.bin
+          curl -fsSL "https://cdn.jsdelivr.net/npm/coi-serviceworker@0.1.7/coi-serviceworker.min.js" \
+               -o _site/coi-serviceworker.js
 
       - name: Copy site files
         run: |
