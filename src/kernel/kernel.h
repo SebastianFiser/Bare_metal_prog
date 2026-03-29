@@ -1,5 +1,6 @@
 #pragma once
 
+#include "console.h"
 struct sbiret {
     long error;
     long value;

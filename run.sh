@@ -11,6 +11,7 @@ COMMON_SRC="$ROOT_DIR/src/kernel/common.c"
 LINKER_SCRIPT="$ROOT_DIR/config/linker/linker.ld"
 GRUB_CFG="$ROOT_DIR/config/grub/grub.cfg"
 OUTPUT_ISO="$ROOT_DIR/os.iso"
+CONSOLE_SRC="$ROOT_DIR/src/kernel/console.c"
 
 echo "[CLEAN]"
 rm -rf "$BUILD" "$ISO" "$OUTPUT_ISO"

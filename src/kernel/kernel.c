@@ -1,5 +1,6 @@
 #include "common.h"
 #include "kernel.h"
+#include "console.h"
 
 void kernel_main(void) {
     clear_screen(0x0F);
