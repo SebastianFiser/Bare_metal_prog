@@ -25,10 +25,11 @@ nasm -f elf32 "$BOOT_SRC" -o "$BUILD/boot.o"
 echo "[2/5] C compile"
 gcc -ffreestanding -m32 -c "$KERNEL_SRC" -o "$BUILD/kernel.o"
 gcc -ffreestanding -m32 -c "$COMMON_SRC" -o "$BUILD/common.o"
+gcc -ffreestanding -m32 -c "$CONSOLE_SRC" -o "$BUILD/console.o"
 
 echo "[3/5] LINK"
 ld -m elf_i386 -T "$LINKER_SCRIPT" -o "$BUILD/$KERNEL" \
-    "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o"
+    "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o" "$BUILD/console.o"
 
 echo "[4/5] COPY"
 cp "$BUILD/$KERNEL" "$ISO/boot/"
