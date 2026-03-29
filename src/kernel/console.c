@@ -1,6 +1,10 @@
 #include "common.h"
 #include "console.h"
 
+static unsigned int cursor_x = 0;
+static unsigned int cursor_y = 0;
+static unsigned char current_color = 0x0F; 
+
 static void vga_putc_at(unsigned int *cx, unsigned int *cy, unsigned char color, char c) {
     if (*cy >= VGA_HEIGHT) return;
 
@@ -104,7 +108,33 @@ void write_text(unsigned int x, unsigned int y, unsigned char color, const char*
         }
         fmt++;
     }
+    end:
+        va_end(vargs);
+}
 
-end:
-    va_end(vargs);
+void screen_init(void) {
+    clear_screen(current_color);
+    cursor_x = 0;
+    cursor_y = 0;
+}
+
+void console_putchar(char c) {
+    vga_putc_at(&cursor_x, &cursor_y, current_color, c);
+    if (cursor_y >= VGA_HEIGHT) {
+        scroll();
+        cursor_y = VGA_HEIGHT - 1;
+        cursor_x = 0;
+        }
+}
+
+static void scroll(void) {
+    for (unsigned int y = 1; y < VGA_HEIGHT; y ++) {
+        for (unsigned x = 0; x < VGA_WIDTH; x++) {
+            VGA_MEMORY[(y - 1) * VGA_WIDTH + x] = VGA_MEMORY[y * VGA_WIDTH + x];
+        }
+    }
+    unsigned short blank = ((unsigned short)current_color << 8) | ' ';
+    for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+        VGA_MEMORY[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = blank;
+    }
 }
