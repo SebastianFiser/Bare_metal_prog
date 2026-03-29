@@ -23,3 +23,9 @@ The demo is automatically built and deployed via GitHub Actions whenever changes
 ## HOW TO RUN MANUALLY
 1. Download `os.iso` from the [GitHub Pages site](https://sebastianfiser.github.io/Bare_metal_prog/os.iso)
 2. Use an emulator like [copy.sh/v86](https://copy.sh/v86/), place the ISO in the CD image slot, and click start
+
+
+## CREDIS
+
+1. All live demo work is done by AI, i have no clue how to do that
+2. rest of the project is done by me, me and myself. My soul and flesh suffered

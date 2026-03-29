@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OS Demo - Live in Browser</title>
+    <link rel="icon" href="data:,">
+    <!-- COI ServiceWorker enables SharedArrayBuffer on GitHub Pages (required by v86 WASM) -->
+    <script src="coi-serviceworker.js"></script>
     <!-- v86 emulator served locally (downloaded during CI build) -->
     <script src="libv86.js"></script>
 </head>
