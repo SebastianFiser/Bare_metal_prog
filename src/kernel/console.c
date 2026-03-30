@@ -131,12 +131,37 @@ static void scroll(void) {
 }
 
 void console_putchar(char c) {
-    vga_putc_at(&cursor_x, &cursor_y, current_color, c);
-    if (cursor_y >= VGA_HEIGHT) {
-        scroll();
-        cursor_y = VGA_HEIGHT - 1;
+    if (c == '\n') {
         cursor_x = 0;
+        cursor_y++;
+        if (cursor_y >= VGA_HEIGHT) {
+            scroll();
+            cursor_y = VGA_HEIGHT - 1;
         }
+        return;
+    }
+
+    if (cursor_x >= VGA_WIDTH) {
+        cursor_x = 0;
+        cursor_y++;
+        if (cursor_y >= VGA_HEIGHT) {
+            scroll();
+            cursor_y = VGA_HEIGHT - 1;
+        }
+    }
+
+    unsigned int index = cursor_y * VGA_WIDTH + cursor_x;
+    VGA_MEMORY[index] = ((unsigned short)current_color << 8) | (unsigned char)c;
+    cursor_x++;
+
+    if (cursor_x >= VGA_WIDTH) {
+        cursor_x = 0;
+        cursor_y++;
+        if (cursor_y >= VGA_HEIGHT) {
+            scroll();
+            cursor_y = VGA_HEIGHT - 1;
+        }
+    }
 }
 
 void console_print_dec(int num) {
