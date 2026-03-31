@@ -1,0 +1,23 @@
+#include "kernel.h"
+#include "console.h"
+
+void pic_remap(void) {
+    outb(0x20, 0x11); // Start initialization in cascade mode
+    outb(0xA0, 0x11);
+    outb(0x21, 0x20); 
+    outb(0xA1, 0x28);
+    outb(0x21, 0x04); 
+    outb(0xA1, 0x02); 
+    outb(0x21, 0x01); 
+    outb(0xA1, 0x01); 
+    outb(0x21, 0x00);
+    outb(0xA1, 0x00);
+}
+
+void keyboard_handler(struct registers *regs) {
+    unsigned char scancode = inb(0x60);
+    console_write("Key pressed: %02x\n", scancode);
+
+    if (regs->int_no >= 40) outb(0xA0, 0x20); // Send reset signal to slave PIC
+    outb(0x20, 0x20); // Send reset signal to master PIC
+}

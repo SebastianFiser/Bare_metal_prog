@@ -1,6 +1,18 @@
 #pragma once
 
 #include "console.h"
+
+/* I/O Port Functions */
+static inline void outb(unsigned short port, unsigned char val) {
+    __asm__ __volatile__ ("outb %0, %1" : : "a" (val), "d" (port));
+}
+
+static inline unsigned char inb(unsigned short port) {
+    unsigned char val;
+    __asm__ __volatile__ ("inb %1, %0" : "=a" (val) : "d" (port));
+    return val;
+}
+
 struct sbiret {
     long error;
     long value;
@@ -20,8 +32,9 @@ struct gdt_ptr {
     unsigned long base;
 } __attribute__((packed));
 
-struct gdt_entry gdt[3];
-struct gdt_ptr gp;
+extern struct gdt_entry gdt[3];
+extern struct gdt_ptr gp;
+
 struct idt_entry {
     unsigned short base_low;
     unsigned short sel;
@@ -35,6 +48,9 @@ struct idt_ptr {
     unsigned long base;
 } __attribute__((packed));
 
+extern struct idt_entry idt[256];
+extern struct idt_ptr idtp;
+
 struct registers {
     unsigned long es, ds;                  // Data segment selector
     unsigned long edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by pusha.
@@ -45,6 +61,7 @@ struct registers {
 void idt_init();
 void idt_set_gate(unsigned char num, unsigned long base, unsigned short sel, unsigned char flags);
 void trap_handler_logic(struct registers *regs);
+void isr33(void);
 
 #define PANIC(fmt, ...)  \
     do { \
@@ -53,3 +70,7 @@ void trap_handler_logic(struct registers *regs);
             __asm__ volatile ("cli; hlt"); \
         } \
     } while (0)
+
+//keyboard related stuff
+void pic_remap(void);
+void keyboard_handler(struct registers *regs);

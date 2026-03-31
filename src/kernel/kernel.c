@@ -42,6 +42,9 @@ void gdt_install() {
     gdt_flush((unsigned int)&gp);
 }
 
+struct gdt_entry gdt[3];
+struct gdt_ptr gp;
+
 struct idt_entry idt[256];
 struct idt_ptr idtp;
 
@@ -90,6 +93,15 @@ __attribute__((naked)) void isr13() {
     );
 }
 
+// isr33 - IRQ1 Keyboard
+__attribute__((naked)) void isr33() {
+    __asm__ __volatile__ (
+        "pushl $0 \n\t"   // Push error code (0 for IRQ)
+        "pushl $33 \n\t"  // Push interrupt number (33 = 32 + 1 after PIC remap)
+        "jmp common_stub \n\t"
+    );
+}
+
 
 //C logic for handler
 void idt_set_gate(unsigned char num, unsigned long base, unsigned short sel, unsigned char flags) {
@@ -110,28 +122,40 @@ void idt_init(void) {
 
     idt_set_gate(0, (unsigned int)isr0, 0x08, 0x8E);
     idt_set_gate(13, (unsigned int)isr13, 0x08, 0x8E);
+    idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
 
     idt_load((unsigned int)&idtp);
 }
 
 void trap_handler_logic(struct registers *regs) {
-    console_write("Interrupt: %d, Error Code: %d\n", regs->int_no, regs->err_code);
-    if (regs->int_no == 0) {
+    // DEBUG: always print what interrupt we received
+    console_write("[ISR] int_no=%d, err_code=%d, eip=0x%x\n", regs->int_no, regs->err_code, regs->eip);
+    
+    if (regs->int_no == 33) {
+        keyboard_handler(regs);
+    }
+    else if (regs->int_no == 0) {
         PANIC("Division by zero");
-    } else if (regs->int_no == 13) {
+    } 
+    else if (regs->int_no == 13) {
         PANIC("General Protection Fault");
+    }
+    else {
+        console_write("Unhandled interrupt: %d\n", regs->int_no);
     }
 }
 
 void kernel_main(void) {
     screen_init();
+    console_write("screen initialized\n");
     gdt_install();
+    console_write("GDT installed\n");
     idt_init();
-
-    console_write("Testing trap handler case 0");
-    __asm__("int $0");
-    console_write("This line will not be reached due to the exception.\n");
+    console_write("IDT installed\n");
+    pic_remap();
+    console_write("PIC remapped\n");
+    console_write("try new feature! Typing!!\n");
 
     for (;;)
-        __asm__ volatile ("cli; hlt");
+        __asm__ volatile ("sti; hlt");
 }
