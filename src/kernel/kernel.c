@@ -137,9 +137,6 @@ void idt_init(void) {
 }
 
 void trap_handler_logic(struct registers *regs) {
-    // DEBUG: always print what interrupt we received
-    console_write("[ISR] int_no=%d, err_code=%d, eip=0x%x\n", regs->int_no, regs->err_code, regs->eip);
-    
     if (regs->int_no == 33) {
         keyboard_handler(regs);
     }

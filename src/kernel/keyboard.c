@@ -1,17 +1,10 @@
 #include "kernel.h"
 #include "console.h"
+#include "keymaps.h"
 
-static const char scancode_map[128] = {
-    [0x02] = '1', [0x03] = '2', [0x04] = '3', [0x05] = '4', [0x06] = '5',
-    [0x07] = '6', [0x08] = '7', [0x09] = '8', [0x0A] = '9', [0x0B] = '0',
-    [0x10] = 'q', [0x11] = 'w', [0x12] = 'e', [0x13] = 'r', [0x14] = 't',
-    [0x15] = 'y', [0x16] = 'u', [0x17] = 'i', [0x18] = 'o', [0x19] = 'p',
-    [0x1E] = 'a', [0x1F] = 's', [0x20] = 'd', [0x21] = 'f', [0x22] = 'g',
-    [0x23] = 'h', [0x24] = 'j', [0x25] = 'k', [0x26] = 'l',
-    [0x2C] = 'z', [0x2D] = 'x', [0x2E] = 'c', [0x2F] = 'v', [0x30] = 'b',
-    [0x31] = 'n', [0x32] = 'm',
-    [0x39] = ' ', [0x1C] = '\n'
-};
+#define LINE_MAX 128
+static char line_buffer[LINE_MAX];
+static unsigned int line_len = 0;
 
 void pic_remap(void) {
     unsigned char a1 = inb(0x21);
@@ -34,15 +27,35 @@ void pic_remap(void) {
 void keyboard_handler(struct registers *regs) {
     unsigned char scancode = inb(0x60);
 
-    // Ignore key release events (break codes).
-    if (scancode < 0x80) {
-        char ch = scancode_map[scancode];
-        if (ch) {
-            char out[2] = { ch, '\0' };
-            console_write("%s\n", out);
-        }
+    if (scancode & 0x80) {
+        goto send_eoi;
     }
 
-    if (regs->int_no >= 40) outb(0xA0, 0x20); // Send reset signal to slave PIC
-    outb(0x20, 0x20); // Send reset signal to master PIC
+    if (scancode == 0x0E) {
+        if (line_len > 0) {
+            line_len--;
+            line_buffer[line_len] = '\0';
+            console_write("\b \b"); // Move back, print space, move back again
+        }
+        goto send_eoi;
+    }
+
+    if (scancode == 0x1C) { // Enter key
+        console_write("\n");
+        line_buffer[line_len] = '\0'; // Null-terminate the string
+        line_len = 0; // Reset buffer for next input
+        goto send_eoi;
+    }
+
+    char ch = scancode_map[scancode];
+    if (ch != 0) {
+        if (line_len < LINE_MAX - 1) {
+            line_buffer[line_len++] = ch;
+            console_putchar(ch);   // vypisuje znaky vedle sebe
+            }
+    }
+
+    send_eoi:
+        if (regs->int_no >= 40) outb(0xA0, 0x20); // Send reset signal to slave PIC
+        outb(0x20, 0x20); // Send reset signal to master PIC
 }

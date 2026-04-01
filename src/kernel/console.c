@@ -131,6 +131,16 @@ static void scroll(void) {
 }
 
 void console_putchar(char c) {
+    if (c == '\b') {
+        if (cursor_x > 0) {
+            cursor_x--;
+        } else if (cursor_y > 0) {
+            cursor_y--;
+            cursor_x = VGA_WIDTH - 1;
+        }
+        return;
+    }
+
     if (c == '\n') {
         cursor_x = 0;
         cursor_y++;
@@ -224,6 +234,15 @@ void console_write(const char* fmt, ...) {
                 case 'x': {
                     unsigned int value = va_arg(vargs, unsigned int);
                     console_print_hex(value);
+                    break;
+                }
+
+                case 'b': {
+                    if (cursor_x > 0) {
+                        cursor_x--;
+                        console_putchar(' '); // Overwrite with space
+                        cursor_x--;
+                    }
                     break;
                 }
 
