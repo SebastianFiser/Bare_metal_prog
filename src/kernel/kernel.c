@@ -93,6 +93,14 @@ __attribute__((naked)) void isr13() {
     );
 }
 
+__attribute__((naked)) void isr32() {
+    __asm__ __volatile__ (
+        "pushl $0 \n\t"   // Push error code (0 for IRQ)
+        "pushl $32 \n\t"  // Push interrupt number (32 = 0 after PIC remap)
+        "jmp common_stub \n\t"
+    );
+}
+
 // isr33 - IRQ1 Keyboard
 __attribute__((naked)) void isr33() {
     __asm__ __volatile__ (
@@ -122,6 +130,7 @@ void idt_init(void) {
 
     idt_set_gate(0, (unsigned int)isr0, 0x08, 0x8E);
     idt_set_gate(13, (unsigned int)isr13, 0x08, 0x8E);
+    idt_set_gate(32, (unsigned int)isr32 , 0x08, 0x8E);
     idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
 
     idt_load((unsigned int)&idtp);
@@ -133,6 +142,10 @@ void trap_handler_logic(struct registers *regs) {
     
     if (regs->int_no == 33) {
         keyboard_handler(regs);
+    }
+    else if (regs->int_no == 32) {
+    outb(0x20, 0x20); // EOI master
+    return;
     }
     else if (regs->int_no == 0) {
         PANIC("Division by zero");

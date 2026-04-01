@@ -13,6 +13,10 @@ static inline unsigned char inb(unsigned short port) {
     return val;
 }
 
+static inline void io_wait() {
+    outb(0x80, 0);
+}
+
 struct sbiret {
     long error;
     long value;
