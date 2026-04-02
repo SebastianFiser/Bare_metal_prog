@@ -1,6 +1,7 @@
 #include "kernel.h"
 #include "console.h"
 #include "keymaps.h"
+#include "shell.h"
 
 #define LINE_MAX 128
 static char line_buffer[LINE_MAX];
@@ -43,7 +44,18 @@ void keyboard_handler(struct registers *regs) {
     if (scancode == 0x1C) { // Enter key
         console_write("\n");
         line_buffer[line_len] = '\0'; // Null-terminate the string
+        shell_execute_command(line_buffer);
         line_len = 0; // Reset buffer for next input
+        goto send_eoi;
+    }
+
+    if (scancode == 0x49) { // PageUp
+        console_scroll_up();
+        goto send_eoi;
+    }
+
+    if (scancode == 0x51) { // PageDown
+        console_scroll_down();
         goto send_eoi;
     }
 

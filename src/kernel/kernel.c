@@ -1,6 +1,7 @@
 #include "common.h"
 #include "kernel.h"
 #include "console.h"
+#include "shell.h"
 
 __attribute__((naked)) void gdt_flush(unsigned int gdt_ptr_addr) {
     __asm__ __volatile__ (
@@ -164,7 +165,11 @@ void kernel_main(void) {
     console_write("IDT installed\n");
     pic_remap();
     console_write("PIC remapped\n");
-    console_write("try new feature! Typing!!\n");
+    console_write("\n");
+    console_write("\n");
+    console_write("welcome to my kernel, type 'help' for a list of commands\n");
+    console_write("\n");
+    shell_prompt();
 
     for (;;)
         __asm__ volatile ("sti; hlt");

@@ -29,3 +29,9 @@ The demo is automatically built and deployed via GitHub Actions whenever changes
 
 1. All live demo work is done by AI, i have no clue how to do that
 2. rest of the project is done by me, me and myself. My soul and flesh suffered
+
+## WORK STATUS
+1. working on terminal wiewports
+2. Scroll up and down function
+3. Shell interface 
+4. commands

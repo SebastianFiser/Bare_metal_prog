@@ -5,6 +5,71 @@ static unsigned int cursor_x = 0;
 static unsigned int cursor_y = 0;
 static unsigned char current_color = 0x0F; 
 
+#define HISTORY_LINES 512
+#define HISTORY_COLS VGA_WIDTH
+
+static char history[HISTORY_LINES][HISTORY_COLS];
+static unsigned int hist_write_line = 0;
+static unsigned int hist_write_col = 0;
+static unsigned int hist_line_count = 1;
+static unsigned int scroll_lines_from_bottom = 0;
+static unsigned int view_top_line = 0;
+static bool follow_bottom = true;
+
+static unsigned int get_bottom_top_line(void) {
+    if (hist_line_count <= VGA_HEIGHT) {
+        return 0;
+    } else if (hist_line_count < HISTORY_LINES) {
+        return hist_line_count - VGA_HEIGHT;
+    } else {
+        return (hist_write_line + HISTORY_LINES - VGA_HEIGHT) % HISTORY_LINES;
+    }
+}
+
+static void apply_scroll_position(void) {
+    unsigned int bottom_top = get_bottom_top_line();
+
+    if (hist_line_count < HISTORY_LINES) {
+        unsigned int max_scroll = (hist_line_count > VGA_HEIGHT) ? (hist_line_count - VGA_HEIGHT) : 0;
+        if (scroll_lines_from_bottom > max_scroll) {
+            scroll_lines_from_bottom = max_scroll;
+        }
+        view_top_line = bottom_top - scroll_lines_from_bottom;
+        return;
+    }
+    view_top_line = (bottom_top + HISTORY_LINES - (scroll_lines_from_bottom % HISTORY_LINES)) % HISTORY_LINES;
+}
+
+static void clear_history_line(unsigned int line) {
+    for (unsigned int x = 0; x < HISTORY_COLS; x++) {
+        history[line][x] = ' ';
+    }
+}
+
+static void history_new_line(void) {
+    hist_write_col = 0;
+    hist_write_line = (hist_write_line + 1) % HISTORY_LINES;
+    clear_history_line(hist_write_line);
+
+    if (hist_line_count < HISTORY_LINES) {
+        hist_line_count++;
+    }
+}
+
+static void update_view_to_bottom(void) {
+    if (!follow_bottom) {
+        return;
+    }
+
+    if (hist_line_count <= VGA_HEIGHT) {
+        view_top_line = 0;
+    } else if (hist_line_count < HISTORY_LINES) {
+        view_top_line = hist_line_count - VGA_HEIGHT;
+    } else {
+        view_top_line = (hist_write_line + HISTORY_LINES - (VGA_HEIGHT - 1)) % HISTORY_LINES;
+    }
+}
+
 static void vga_putc_at(unsigned int *cx, unsigned int *cy, unsigned char color, char c) {
     if (*cy >= VGA_HEIGHT) return;
 
@@ -113,9 +178,19 @@ void write_text(unsigned int x, unsigned int y, unsigned char color, const char*
 }
 
 void screen_init(void) {
-    clear_screen(current_color);
+    for (unsigned int y = 0; y < HISTORY_LINES; y++) {
+        clear_history_line(y);
+    }
+
+    hist_write_line = 0;
+    hist_write_col = 0;
+    hist_line_count = 1;
+    view_top_line = 0;
+    follow_bottom = true;
+
     cursor_x = 0;
     cursor_y = 0;
+    console_redraw_view();
 }
 
 static void scroll(void) {
@@ -130,48 +205,68 @@ static void scroll(void) {
     }
 }
 
+void console_redraw_view(void) {
+    unsigned char color = current_color;
+
+    for (unsigned int y = 0; y < VGA_HEIGHT; y++) {
+        bool row_valid = false;
+        unsigned int hist_y = 0;
+
+        if (hist_line_count < HISTORY_LINES) {
+            unsigned int candidate = view_top_line + y;
+            if (candidate < hist_line_count) {
+                row_valid = true;
+                hist_y = candidate;
+            }
+        } else {
+            row_valid = true;
+            hist_y = (view_top_line + y) % HISTORY_LINES;
+        }
+
+        for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+            char ch = row_valid ? history[hist_y][x] : ' ';
+            unsigned int vga_index = y * VGA_WIDTH + x;
+            VGA_MEMORY[vga_index] = ((unsigned short)color << 8) | (unsigned char)ch; 
+        }
+    }
+}
+
 void console_putchar(char c) {
     if (c == '\b') {
-        if (cursor_x > 0) {
-            cursor_x--;
-        } else if (cursor_y > 0) {
-            cursor_y--;
-            cursor_x = VGA_WIDTH - 1;
+        if (hist_write_col > 0) {
+            hist_write_col--;
+            history[hist_write_line][hist_write_col] = ' ';
+        } else if (hist_line_count > 1) {
+            hist_write_line = (hist_write_line + HISTORY_LINES - 1) % HISTORY_LINES;
+            hist_write_col = VGA_WIDTH;
+            while (hist_write_col > 0 && history[hist_write_line][hist_write_col - 1] == ' ') {
+                hist_write_col--;
+            }
+            if (hist_write_col > 0) {
+                hist_write_col--;
+                history[hist_write_line][hist_write_col] = ' ';
+            }
         }
-        return;
+        goto redraw;
     }
 
     if (c == '\n') {
-        cursor_x = 0;
-        cursor_y++;
-        if (cursor_y >= VGA_HEIGHT) {
-            scroll();
-            cursor_y = VGA_HEIGHT - 1;
-        }
-        return;
+        history_new_line();
+        goto redraw;
     }
 
-    if (cursor_x >= VGA_WIDTH) {
-        cursor_x = 0;
-        cursor_y++;
-        if (cursor_y >= VGA_HEIGHT) {
-            scroll();
-            cursor_y = VGA_HEIGHT - 1;
-        }
+    if (hist_write_col >= VGA_WIDTH) {
+        history_new_line();
     }
 
-    unsigned int index = cursor_y * VGA_WIDTH + cursor_x;
-    VGA_MEMORY[index] = ((unsigned short)current_color << 8) | (unsigned char)c;
-    cursor_x++;
+    history[hist_write_line][hist_write_col] = c;
+    hist_write_col++;
 
-    if (cursor_x >= VGA_WIDTH) {
-        cursor_x = 0;
-        cursor_y++;
-        if (cursor_y >= VGA_HEIGHT) {
-            scroll();
-            cursor_y = VGA_HEIGHT - 1;
-        }
-    }
+redraw:
+    cursor_x = hist_write_col;
+    cursor_y = (hist_line_count < VGA_HEIGHT) ? (hist_line_count - 1) : (VGA_HEIGHT - 1);
+    update_view_to_bottom();
+    console_redraw_view();
 }
 
 void console_print_dec(int num) {
@@ -258,5 +353,30 @@ void console_write(const char* fmt, ...) {
     }
     end:
         va_end(vargs);
+}
+
+void console_scroll_up(void) {
+    unsigned int max_scroll = (hist_line_count > VGA_HEIGHT) ? (hist_line_count - VGA_HEIGHT) : 0;
+    if (max_scroll == 0) {
+        return;
+    }
+
+    if (scroll_lines_from_bottom < max_scroll) {
+        scroll_lines_from_bottom++;
+    }
+
+    follow_bottom = (scroll_lines_from_bottom == 0);
+    apply_scroll_position();
+    console_redraw_view();
+}
+
+void console_scroll_down(void) {
+    if (scroll_lines_from_bottom > 0) {
+        scroll_lines_from_bottom--;
+    }
+
+    follow_bottom = (scroll_lines_from_bottom == 0);
+    apply_scroll_position();
+    console_redraw_view();
 }
 

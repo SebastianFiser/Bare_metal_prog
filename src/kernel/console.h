@@ -7,6 +7,8 @@
 void clear_screen(unsigned char color);
 void screen_init(void);
 void console_putchar(char c);
-static void scroll(void);
 void console_write(const char* fmt, ...);
+void console_redraw_view(void);
+void console_scroll_up(void);
+void console_scroll_down(void);
 void write_text(unsigned int x, unsigned int y, unsigned char color, const char* fmt, ...);

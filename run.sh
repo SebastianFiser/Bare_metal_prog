@@ -13,6 +13,7 @@ GRUB_CFG="$ROOT_DIR/config/grub/grub.cfg"
 OUTPUT_ISO="$ROOT_DIR/os.iso"
 CONSOLE_SRC="$ROOT_DIR/src/kernel/console.c"
 KEYBOARD_SRC="$ROOT_DIR/src/kernel/keyboard.c"
+SHELL_SRC="$ROOT_DIR/src/kernel/shell.c"
 
 echo "[CLEAN]"
 rm -rf "$BUILD" "$ISO" "$OUTPUT_ISO"
@@ -29,10 +30,11 @@ gcc -ffreestanding -m32 -c "$KERNEL_SRC" -o "$BUILD/kernel.o"
 gcc -ffreestanding -m32 -c "$COMMON_SRC" -o "$BUILD/common.o"
 gcc -ffreestanding -m32 -c "$CONSOLE_SRC" -o "$BUILD/console.o"
 gcc -ffreestanding -m32 -c "$KEYBOARD_SRC" -o "$BUILD/keyboard.o"
+gcc -ffreestanding -m32 -c "$SHELL_SRC" -o "$BUILD/shell.o"
 
 echo "[3/5] LINK"
 ld -m elf_i386 -T "$LINKER_SCRIPT" -o "$BUILD/$KERNEL" \
-    "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o" "$BUILD/console.o" $BUILD/keyboard.o
+    "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o" "$BUILD/console.o" "$BUILD/keyboard.o" "$BUILD/shell.o"
 
 echo "[4/5] COPY"
 cp "$BUILD/$KERNEL" "$ISO/boot/"
