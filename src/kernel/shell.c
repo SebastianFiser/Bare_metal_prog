@@ -52,12 +52,30 @@ static int shell_tokenize(const char *in, char argv[][SHELL_MAX_TOKEN]) {
 }
 
 static void cmd_help(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void whatisthis(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void whoami(int argc, char argv[][SHELL_MAX_TOKEN]);
 
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
+    {"whoami", "display current user", whoami},
+    {"whatisthis", "tell generic info about his project", whatisthis},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void whatisthis(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    (void)argc;
+    (void)argv;
+
+    console_write("This is a simple hobby OS kernel written in C, with a custom VGA text mode \nconsole and basic shell functionality.\nIt demonstrates low-level programming concepts such as memory management,\ninterrupt handling, and hardware interaction.\nMade by Sebastian.F. This is my first larger C project.\nPlease help me save up some cookies for new headphones,\nby rating this project well, thanks!\n");
+}
+
+static void whoami(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    (void)argc;
+    (void)argv;
+
+    console_write("You are a user of this kernel!\n");
+}
 
 static void cmd_help(int argc, char argv[][SHELL_MAX_TOKEN]) {
     (void)argc;
