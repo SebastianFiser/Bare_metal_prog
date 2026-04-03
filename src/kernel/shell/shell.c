@@ -2,6 +2,7 @@
 #include "console.h"
 #include "filesys.h"
 #include "input.h"
+#include "meowim.h"
 #include "shell.h"
 
 #define SHELL_MAX_ARGS 8
@@ -61,6 +62,7 @@ static void cmd_clear(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void print_files(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void read_file(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void make_file(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void edit_file(int argc, char argv[][SHELL_MAX_TOKEN]);
 
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
@@ -70,11 +72,20 @@ static const shell_command_t commands[] = {
     {"clear", "clear the screen", cmd_clear},
     {"ls", "list files in the file system", print_files},
     {"cat", "display the contents of a file", read_file},
-    {"makef", "create an empty file, usage: makef <name>", make_file}
+    {"makef", "create an empty file, usage: makef <name>", make_file},
+    {"edit", "open meowim editor, usage: edit <filename>", edit_file},
 
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void edit_file(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    if (argc >= 2) {
+        meowim_open_file(argv[1]);
+    } else {
+        meowim_open();
+    }
+}
 
 static void print_files(int argc, char argv[][SHELL_MAX_TOKEN]) {
     (void)argc;
@@ -176,7 +187,9 @@ void shell_execute_command(const char *cmdline) {
     for (unsigned int i = 0; i < SHELL_COMMAND_COUNT; i++) {
         if (streq(argv[0], commands[i].name)) {
             commands[i].handler(argc, argv);
-            shell_prompt();
+            if (input_get_mode() == MODE_SHELL) {
+                shell_prompt();
+            }
             return;
         }
     }

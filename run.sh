@@ -16,6 +16,7 @@ KEYBOARD_SRC="$ROOT_DIR/src/kernel/hardware/keyboard.c"
 SHELL_SRC="$ROOT_DIR/src/kernel/shell/shell.c"
 INPUT_SRC="$ROOT_DIR/src/kernel/shell/input.c"
 FILESYS_SRC="$ROOT_DIR/src/kernel/filesystem/filesys.c"
+MEOWIM_SRC="$ROOT_DIR/src/kernel/lib/progs/meowim.c"
 
 echo "[CLEAN]"
 rm -rf "$BUILD" "$ISO" "$OUTPUT_ISO"
@@ -28,7 +29,7 @@ echo "[1/5] ASM compile"
 nasm -f elf32 "$BOOT_SRC" -o "$BUILD/boot.o"
 
 echo "[2/5] C compile"
-INCLUDE_FLAGS="-I$ROOT_DIR/src/kernel/core -I$ROOT_DIR/src/kernel/lib -I$ROOT_DIR/src/kernel/hardware -I$ROOT_DIR/src/kernel/filesystem -I$ROOT_DIR/src/kernel/shell"
+INCLUDE_FLAGS="-I$ROOT_DIR/src/kernel/core -I$ROOT_DIR/src/kernel/lib -I$ROOT_DIR/src/kernel/lib/progs -I$ROOT_DIR/src/kernel/hardware -I$ROOT_DIR/src/kernel/filesystem -I$ROOT_DIR/src/kernel/shell"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$KERNEL_SRC" -o "$BUILD/kernel.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$COMMON_SRC" -o "$BUILD/common.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$CONSOLE_SRC" -o "$BUILD/console.o"
@@ -36,11 +37,12 @@ gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$KEYBOARD_SRC" -o "$BUILD/keyboard.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$SHELL_SRC" -o "$BUILD/shell.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$INPUT_SRC" -o "$BUILD/input.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$FILESYS_SRC" -o "$BUILD/filesys.o"
+gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$MEOWIM_SRC" -o "$BUILD/meowim.o"
 
 echo "[3/5] LINK"
 ld -m elf_i386 -T "$LINKER_SCRIPT" -o "$BUILD/$KERNEL" \
     "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o" "$BUILD/console.o" "$BUILD/keyboard.o" "$BUILD/shell.o" "$BUILD/input.o" \
-    "$BUILD/filesys.o"
+    "$BUILD/filesys.o" "$BUILD/meowim.o"
 
 echo "[4/5] COPY"
 cp "$BUILD/$KERNEL" "$ISO/boot/"

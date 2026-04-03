@@ -35,7 +35,7 @@ jobs:
         run: |
           set -e
           mkdir -p iso/boot/grub build
-          INCLUDE_FLAGS="-Isrc/kernel/core -Isrc/kernel/lib -Isrc/kernel/hardware -Isrc/kernel/filesystem -Isrc/kernel/shell"
+          INCLUDE_FLAGS="-Isrc/kernel/core -Isrc/kernel/lib -Isrc/kernel/lib/progs -Isrc/kernel/hardware -Isrc/kernel/filesystem -Isrc/kernel/shell"
           nasm -f elf32 src/boot/boot.asm -o build/boot.o
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/core/kernel.c -o build/kernel.o
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/lib/common.c -o build/common.o
@@ -44,8 +44,9 @@ jobs:
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/shell/shell.c -o build/shell.o
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/filesystem/filesys.c -o build/filesys.o
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/shell/input.c -o build/input.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/lib/progs/meowim.c -o build/meowim.o
           ld -m elf_i386 -T config/linker/linker.ld -o build/kernel.elf \
-              build/boot.o build/kernel.o build/common.o build/console.o build/keyboard.o build/shell.o build/filesys.o build/input.o
+              build/boot.o build/kernel.o build/common.o build/console.o build/keyboard.o build/shell.o build/filesys.o build/input.o build/meowim.o
           cp build/kernel.elf iso/boot/
           cp config/grub/grub.cfg iso/boot/grub/grub.cfg
           grub-mkrescue -o os.iso iso/

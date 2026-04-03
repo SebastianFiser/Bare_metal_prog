@@ -418,3 +418,50 @@ void console_cursor_right(void) {
     console_redraw_view();
 }
 
+void console_save_state(console_state_t *state) {
+    if (!state) {
+        return;
+    }
+
+    state->cursor_x = cursor_x;
+    state->cursor_y = cursor_y;
+    state->current_color = current_color;
+
+    state->hist_write_line = hist_write_line;
+    state->hist_write_col = hist_write_col;
+    state->hist_line_count = hist_line_count;
+    state->scroll_lines_from_bottom = scroll_lines_from_bottom;
+    state->view_top_line = view_top_line;
+    state->follow_bottom = follow_bottom;
+
+    for (unsigned int y = 0; y < HISTORY_LINES; y++) {
+        for (unsigned int x = 0; x < HISTORY_COLS; x++) {
+            state->history[y][x] = history[y][x];
+        }
+    }
+}
+
+void console_restore_state(const console_state_t *state) {
+    if (!state) {
+        return;
+    }
+
+    cursor_x = state->cursor_x;
+    cursor_y = state->cursor_y;
+    current_color = state->current_color;
+
+    hist_write_line = state->hist_write_line;
+    hist_write_col = state->hist_write_col;
+    hist_line_count = state->hist_line_count;
+    scroll_lines_from_bottom = state->scroll_lines_from_bottom;
+    view_top_line = state->view_top_line;
+    follow_bottom = state->follow_bottom;
+
+    for (unsigned int y = 0; y < HISTORY_LINES; y++) {
+        for (unsigned int x = 0; x < HISTORY_COLS; x++) {
+            history[y][x] = state->history[y][x];
+        }
+    }
+
+    console_redraw_view();
+}

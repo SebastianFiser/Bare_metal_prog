@@ -10,6 +10,10 @@ static unsigned int event_tail = 0;
 static unsigned int event_count = 0;
 static int extended = 0;
 static int shift_pressed = 0;
+static int ctrl_pressed = 0;
+
+#define SCANCODE_CTRL_PRESS 0x1D
+#define SCANCODE_CTRL_RELEASE 0x9D
 
 static void keyboard_push_event(input_event_type_t type, char ch) {
     if (event_count >= KBD_EVENT_QUEUE_SIZE) {
@@ -62,7 +66,27 @@ void keyboard_handler(struct registers *regs) {
     if (extended) {
         extended = 0;
 
+        if (scancode == SCANCODE_CTRL_PRESS) {
+            ctrl_pressed = 1;
+            goto send_eoi;
+        }
+
+        if (scancode == SCANCODE_CTRL_RELEASE) {
+            ctrl_pressed = 0;
+            goto send_eoi;
+        }
+
         if (scancode & 0x80) {
+            goto send_eoi;
+        }
+
+        if (scancode == 0x48) { // Up arrow
+            keyboard_push_event(INPUT_EVENT_UP, 0);
+            goto send_eoi;
+        }
+
+        if (scancode == 0x50) { // Down arrow
+            keyboard_push_event(INPUT_EVENT_DOWN, 0);
             goto send_eoi;
         }
 
@@ -76,12 +100,12 @@ void keyboard_handler(struct registers *regs) {
             goto send_eoi;
         }
 
-        if (scancode == 0x49) { // Up arrow
+        if (scancode == 0x49) { // PageUp
             keyboard_push_event(INPUT_EVENT_PAGEUP, 0);
             goto send_eoi;
         }
 
-        if (scancode == 0x51) { // Down arrow
+        if (scancode == 0x51) { // PageDown
             keyboard_push_event(INPUT_EVENT_PAGEDOWN, 0);
             goto send_eoi;
         }
@@ -99,6 +123,16 @@ void keyboard_handler(struct registers *regs) {
         goto send_eoi;
     }
 
+    if (scancode == SCANCODE_CTRL_PRESS) {
+        ctrl_pressed = 1;
+        goto send_eoi;
+    }
+
+    if (scancode == SCANCODE_CTRL_RELEASE) {
+        ctrl_pressed = 0;
+        goto send_eoi;
+    }
+
     if (scancode & 0x80) {
         goto send_eoi;
     }
@@ -110,6 +144,16 @@ void keyboard_handler(struct registers *regs) {
 
     if (scancode == 0x1C) { // Enter key
         keyboard_push_event(INPUT_EVENT_ENTER, 0);
+        goto send_eoi;
+    }
+
+    if (scancode == 0x48) { // Up arrow
+        keyboard_push_event(INPUT_EVENT_UP, 0);
+        goto send_eoi;
+    }
+
+    if (scancode == 0x50) { // Down arrow
+        keyboard_push_event(INPUT_EVENT_DOWN, 0);
         goto send_eoi;
     }
 
@@ -129,6 +173,12 @@ void keyboard_handler(struct registers *regs) {
         ch = scancode_map_shift[scancode];
     } else {
         ch = scancode_map[scancode];
+    }
+
+    if (ctrl_pressed && ch >= 'A' && ch <= 'Z') {
+        ch = (char)(ch - 'A' + 1);
+    } else if (ctrl_pressed && ch >= 'a' && ch <= 'z') {
+        ch = (char)(ch - 'a' + 1);
     }
     
     if (ch != 0) {

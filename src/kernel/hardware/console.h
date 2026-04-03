@@ -1,8 +1,13 @@
 #pragma once
 
+#include "common.h"
+
 #define VGA_WIDTH 80
 #define VGA_HEIGHT 25
 #define VGA_MEMORY ((volatile unsigned short*)0xB8000)
+
+#define HISTORY_LINES 512
+#define HISTORY_COLS VGA_WIDTH
 
 void clear_screen(unsigned char color);
 void screen_init(void);
@@ -16,3 +21,21 @@ void console_print_dec(int num);
 void console_scroll_up(void);
 void console_scroll_down(void);
 void write_text(unsigned int x, unsigned int y, unsigned char color, const char* fmt, ...);
+
+typedef struct {
+    unsigned int cursor_x;
+    unsigned int cursor_y;
+    unsigned char current_color;
+
+    unsigned int hist_write_line;
+    unsigned int hist_write_col;
+    unsigned int hist_line_count;
+    unsigned int scroll_lines_from_bottom;
+    unsigned int view_top_line;
+    bool follow_bottom;
+
+    char history[HISTORY_LINES][HISTORY_COLS];
+} console_state_t;
+
+void console_save_state(console_state_t* state);
+void console_restore_state(const console_state_t* state);
