@@ -35,14 +35,15 @@ jobs:
         run: |
           set -e
           mkdir -p iso/boot/grub build
+          INCLUDE_FLAGS="-Isrc/kernel/core -Isrc/kernel/lib -Isrc/kernel/hardware -Isrc/kernel/filesystem -Isrc/kernel/shell"
           nasm -f elf32 src/boot/boot.asm -o build/boot.o
-          gcc -ffreestanding -m32 -c src/kernel/kernel.c -o build/kernel.o
-          gcc -ffreestanding -m32 -c src/kernel/common.c -o build/common.o
-          gcc -ffreestanding -m32 -c src/kernel/console.c -o build/console.o
-          gcc -ffreestanding -m32 -c src/kernel/keyboard.c -o build/keyboard.o
-          gcc -ffreestanding -m32 -c src/kernel/shell.c -o build/shell.o
-          gcc -ffreestanding -m32 -c src/kernel/filesys.c -o build/filesys.o
-          gcc -ffreestanding -m32 -c src/kernel/input.c -o build/input.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/core/kernel.c -o build/kernel.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/lib/common.c -o build/common.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/hardware/console.c -o build/console.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/hardware/keyboard.c -o build/keyboard.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/shell/shell.c -o build/shell.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/filesystem/filesys.c -o build/filesys.o
+          gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/shell/input.c -o build/input.o
           ld -m elf_i386 -T config/linker/linker.ld -o build/kernel.elf \
               build/boot.o build/kernel.o build/common.o build/console.o build/keyboard.o build/shell.o build/filesys.o build/input.o
           cp build/kernel.elf iso/boot/
