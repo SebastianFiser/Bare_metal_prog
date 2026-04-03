@@ -394,3 +394,27 @@ void console_draw_cursor(void) {
     VGA_MEMORY[idx] = ((unsigned short)0x70 << 8) | ch;
 }
 
+void console_cursor_left(void) {
+    if (hist_write_col == 0) {
+        return;
+    }
+
+    hist_write_col--;
+    cursor_x = hist_write_col;
+    cursor_y = (hist_line_count < VGA_HEIGHT) ? (hist_line_count - 1) : (VGA_HEIGHT - 1);
+    update_view_to_bottom();
+    console_redraw_view();
+}
+
+void console_cursor_right(void) {
+    if (hist_write_col >= VGA_WIDTH) {
+        return;
+    }
+
+    hist_write_col++;
+    cursor_x = hist_write_col;
+    cursor_y = (hist_line_count < VGA_HEIGHT) ? (hist_line_count - 1) : (VGA_HEIGHT - 1);
+    update_view_to_bottom();
+    console_redraw_view();
+}
+

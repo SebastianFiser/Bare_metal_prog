@@ -1,31 +1,14 @@
 #include "kernel.h"
-#include "console.h"
 #include "keymaps.h"
-#include "shell.h"
+#include "input.h"
 
-typedef enum {
-    INPUT_EVENT_CHAR,
-    INPUT_EVENT_ENTER,
-    INPUT_EVENT_BACKSPACE,
-    INPUT_EVENT_PAGEUP,
-    INPUT_EVENT_PAGEDOWN,
-} input_event_type_t;
-
-typedef struct {
-    input_event_type_t type;
-    char ch;
-} input_event_t;
-
-#define LINE_MAX 128
 #define KBD_EVENT_QUEUE_SIZE 64
 
 static input_event_t event_queue[KBD_EVENT_QUEUE_SIZE];
 static unsigned int event_head = 0;
 static unsigned int event_tail = 0;
 static unsigned int event_count = 0;
-
-static char line_buffer[LINE_MAX];
-static unsigned int line_len = 0;
+static int extended = 0;
 
 static void keyboard_push_event(input_event_type_t type, char ch) {
     if (event_count >= KBD_EVENT_QUEUE_SIZE) {
@@ -70,6 +53,40 @@ void pic_remap(void) {
 void keyboard_handler(struct registers *regs) {
     unsigned char scancode = inb(0x60);
 
+    if (scancode == 0xE0) {
+        extended = 1;
+        goto send_eoi;
+    }
+
+    if (extended) {
+        extended = 0;
+
+        if (scancode & 0x80) {
+            goto send_eoi;
+        }
+
+        if (scancode == 0x4B) { // Left arrow
+            keyboard_push_event(INPUT_EVENT_LEFT, 0);
+            goto send_eoi;
+        }
+
+        if (scancode == 0x4D) { // Right arrow
+            keyboard_push_event(INPUT_EVENT_RIGHT, 0);
+            goto send_eoi;
+        }
+
+        if (scancode == 0x49) { // Up arrow
+            keyboard_push_event(INPUT_EVENT_PAGEUP, 0);
+            goto send_eoi;
+        }
+
+        if (scancode == 0x51) { // Down arrow
+            keyboard_push_event(INPUT_EVENT_PAGEDOWN, 0);
+            goto send_eoi;
+        }
+        goto send_eoi;
+    }
+
     if (scancode & 0x80) {
         goto send_eoi;
     }
@@ -108,39 +125,6 @@ void keyboard_poll(void) {
     input_event_t event;
 
     while (keyboard_pop_event(&event)) {
-        if (event.type == INPUT_EVENT_CHAR) {
-            if (line_len < LINE_MAX - 1) {
-                line_buffer[line_len++] = event.ch;
-                console_putchar(event.ch);
-            }
-            continue;
-        }
-
-        if (event.type == INPUT_EVENT_BACKSPACE) {
-            if (line_len > 0) {
-                line_len--;
-                line_buffer[line_len] = '\0';
-                console_write("\b \b");
-            }
-            continue;
-        }
-
-        if (event.type == INPUT_EVENT_ENTER) {
-            console_write("\n");
-            line_buffer[line_len] = '\0';
-            shell_execute_command(line_buffer);
-            line_len = 0;
-            continue;
-        }
-
-        if (event.type == INPUT_EVENT_PAGEUP) {
-            console_scroll_up();
-            continue;
-        }
-
-        if (event.type == INPUT_EVENT_PAGEDOWN) {
-            console_scroll_down();
-            continue;
-        }
+        input_handle_event(&event);
     }
 }

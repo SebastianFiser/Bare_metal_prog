@@ -10,6 +10,8 @@ void console_putchar(char c);
 void console_write(const char* fmt, ...);
 void console_redraw_view(void);
 void console_draw_cursor(void);
+void console_cursor_left(void);
+void console_cursor_right(void);
 void console_scroll_up(void);
 void console_scroll_down(void);
 void write_text(unsigned int x, unsigned int y, unsigned char color, const char* fmt, ...);
