@@ -78,3 +78,4 @@ void isr33(void);
 //keyboard related stuff
 void pic_remap(void);
 void keyboard_handler(struct registers *regs);
+void keyboard_poll(void);

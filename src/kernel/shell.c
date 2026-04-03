@@ -55,15 +55,24 @@ static void cmd_help(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void whatisthis(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void whoami(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_echo(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_clear(int argc, char argv[][SHELL_MAX_TOKEN]);
 
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
     {"whoami", "display current user", whoami},
     {"whatisthis", "tell generic info about his project", whatisthis},
     {"echo", "display a line of text written in a second argument", cmd_echo},
+    {"clear", "clear the screen", cmd_clear},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void cmd_clear(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    (void)argc;
+    (void)argv;
+
+    clear_screen(0x0F);
+}
 
 static void cmd_echo(int argc, char argv[][SHELL_MAX_TOKEN]) {
     if (argc < 2) {

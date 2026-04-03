@@ -229,6 +229,8 @@ void console_redraw_view(void) {
             VGA_MEMORY[vga_index] = ((unsigned short)color << 8) | (unsigned char)ch; 
         }
     }
+
+    console_draw_cursor();
 }
 
 void console_putchar(char c) {
@@ -378,5 +380,17 @@ void console_scroll_down(void) {
     follow_bottom = (scroll_lines_from_bottom == 0);
     apply_scroll_position();
     console_redraw_view();
+}
+
+void console_draw_cursor(void) {
+    // Optional: Implement hardware cursor drawing if desired
+    if (cursor_x >= VGA_WIDTH) return;
+    if (cursor_y >= VGA_HEIGHT) return;
+
+    unsigned int idx = cursor_y * VGA_WIDTH + cursor_x;
+    unsigned short cell = VGA_MEMORY[idx];
+    unsigned char ch = (unsigned char)(cell & 0xFF);
+
+    VGA_MEMORY[idx] = ((unsigned short)0x70 << 8) | ch;
 }
 

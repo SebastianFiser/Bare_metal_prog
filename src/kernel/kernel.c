@@ -171,6 +171,8 @@ void kernel_main(void) {
     console_write("\n");
     shell_prompt();
 
-    for (;;)
+    for (;;) {
+        keyboard_poll();
         __asm__ volatile ("sti; hlt");
+    }
 }
