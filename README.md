@@ -1,87 +1,144 @@
 # Bare Metal Kernel
 
-A hobby x86 bare-metal OS kernel written in C and assembly, bootable via GRUB2, featuring a VGA text-mode console, keyboard input, a basic shell, an in-memory filesystem, and the **meowim** text editor.
+A hobby x86 bare-metal operating system kernel written in C and x86 assembly.
+It boots via GRUB2 (multiboot2), runs entirely in protected mode, and provides a VGA
+text-mode console, a PS/2 keyboard driver, an interactive shell, an in-memory
+filesystem, and a built-in fullscreen text editor called **meowim**.
 
-## 🎮 Demo
-Try this OS directly in your browser — no install needed!
+---
 
-👉 **[Launch Live Demo](https://sebastianfiser.github.io/Bare_metal_prog/)**
+## Live Demo
 
-The demo is automatically built and deployed via GitHub Actions whenever changes are pushed to `main`.
+Try the kernel directly in your browser — no installation required.
 
-## HOW TO BUILD LOCALLY
-1. Install dependencies: `bash download_dep.sh`
-2. Build and run: `bash run.sh`
+**[Launch Live Demo](https://sebastianfiser.github.io/Bare_metal_prog/)**
 
-## REPOSITORY STRUCTURE
+The demo ISO is automatically built and deployed to GitHub Pages via GitHub Actions
+on every push to `main`.
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+Install all required build tools with the provided script:
+
+```bash
+bash download_dep.sh
+```
+
+This installs: `gcc-multilib`, `nasm`, `qemu-system-x86`, `grub-pc-bin`, `xorriso`, and `binutils`.
+
+### Build and Run
+
+```bash
+bash run.sh
+```
+
+This compiles the kernel, creates a bootable ISO, and launches it in QEMU.
+
+### Run Without a GUI (headless)
+
+```bash
+NO_GUI=1 bash run.sh
+```
+
+---
+
+## Running the ISO Manually
+
+1. Download `os.iso` from the [GitHub Pages site](https://sebastianfiser.github.io/Bare_metal_prog/os.iso).
+2. Open an x86 emulator such as [copy.sh/v86](https://copy.sh/v86/).
+3. Load the ISO into the CD-ROM slot and click **Start**.
+
+---
+
+## Repository Structure
+
 ```
 src/
-  boot/
-    boot.asm                  - boot entry + multiboot2 header
-  kernel/
-    core/
-      kernel.c / kernel.h     - kernel main, GDT, IDT, interrupt handlers
-    hardware/
-      console.c / console.h   - VGA text-mode console, colors, scrolling
-      keyboard.c / keymaps.h  - PS/2 keyboard driver + keymap
-    lib/
-      common.c / common.h     - shared helpers (string, I/O port ops)
-      progs/
-        meowim.c / meowim.h   - meowim fullscreen text editor
-    shell/
-      shell.c / shell.h       - command dispatcher and built-in commands
-      input.c / input.h       - input event abstraction (shell / editor modes)
-    filesystem/
-      filesys.c / filesys.h   - in-memory filesystem (files + directories)
+├── boot/
+│   └── boot.asm                  Boot entry point and multiboot2 header
+└── kernel/
+    ├── core/
+    │   ├── kernel.c / kernel.h   Kernel entry, GDT, IDT, interrupt handlers
+    ├── hardware/
+    │   ├── console.c / console.h VGA text-mode console, colour attributes, scrolling
+    │   ├── keyboard.c            PS/2 keyboard interrupt driver
+    │   └── keymaps.h             Keyboard scancode-to-ASCII mapping
+    ├── lib/
+    │   ├── common.c / common.h   Shared utilities: string ops, I/O port helpers
+    │   └── progs/
+    │       ├── meowim.c          Fullscreen text editor implementation
+    │       └── meowim.h
+    ├── shell/
+    │   ├── shell.c / shell.h     Command dispatcher and built-in command handlers
+    │   └── input.c / input.h     Input event layer (shell mode / editor mode)
+    └── filesystem/
+        ├── filesys.c             In-memory filesystem (files and directories)
+        └── filesys.h
+
 config/
-  linker/linker.ld            - linker script
-  grub/grub.cfg               - GRUB boot config
-run.sh                        - local build + QEMU run script
-download_dep.sh               - install build dependencies
+├── linker/linker.ld              Linker script for the kernel ELF binary
+└── grub/grub.cfg                 GRUB2 boot configuration
+
+run.sh                            Build script: compiles, links, creates ISO, runs QEMU
+download_dep.sh                   Installs all required build dependencies
 ```
 
-## SHELL COMMANDS
+---
+
+## Shell Reference
+
+After boot the kernel drops into an interactive shell. The following commands are available:
+
 | Command | Description |
 |---------|-------------|
-| `help` | list built-in commands |
-| `whoami` | display current user |
-| `whatisthis` | show info about this project |
-| `echo <text>` | print text to the console |
-| `clear` | clear the screen |
-| `ls` | list files in the current directory |
-| `cat <file>` | display the contents of a file |
-| `makef <name>` | create a new empty file |
-| `edit [file]` | open meowim text editor (optional filename) |
-| `cd <dir>` | change current directory |
-| `mkdir <dir>` | create a new directory |
+| `help` | Display a list of all available commands |
+| `whoami` | Print information about the current user |
+| `whatisthis` | Display a short description of this project |
+| `echo <text …>` | Print the given text to the console |
+| `clear` | Clear the screen |
+| `ls` | List files and directories in the current directory |
+| `cat <file>` | Print the contents of a file |
+| `makef <name>` | Create a new empty file in the current directory |
+| `mkdir <name>` | Create a new directory in the current directory |
+| `cd <path>` | Change the current working directory |
+| `edit [file]` | Open the meowim text editor, optionally with a file |
 
-### meowim editor shortcuts
+### meowim Text Editor
+
+meowim is a simple fullscreen VGA text editor inspired by modal editors.
+
 | Key | Action |
 |-----|--------|
-| `Ctrl+S` | save file |
-| `Ctrl+Q` | quit editor |
-| `Arrow keys` | move cursor |
-| `PgUp / PgDn` | scroll view |
-| `Backspace` | delete character |
-| `Enter` | new line |
+| `Ctrl+S` | Save the current file |
+| `Ctrl+Q` | Quit the editor and return to the shell |
+| `Arrow keys` | Move the cursor |
+| `Page Up / Page Down` | Scroll the view |
+| `Backspace` | Delete the character before the cursor |
+| `Enter` | Insert a new line |
 
-## HOW TO RUN MANUALLY
-1. Download `os.iso` from the [GitHub Pages site](https://sebastianfiser.github.io/Bare_metal_prog/os.iso)
-2. Use an emulator like [copy.sh/v86](https://copy.sh/v86/), place the ISO in the CD image slot, and click start
+---
 
-## CREDITS
+## Features
 
-1. All live demo / GitHub Pages work is done by AI — I have no clue how to do that
-2. Rest of the project is done by me, me and myself. My soul and flesh suffered
+- [x] Bootable kernel image (GRUB2 / multiboot2, 32-bit protected mode)
+- [x] Global Descriptor Table (GDT) and Interrupt Descriptor Table (IDT)
+- [x] Programmable Interrupt Controller (PIC) remapping
+- [x] PS/2 keyboard driver with interrupt handling
+- [x] VGA text-mode console with colour support and hardware cursor
+- [x] Interactive shell with tokenizer and command dispatch
+- [x] In-memory filesystem supporting files and directories (`ls`, `cat`, `makef`, `mkdir`, `cd`)
+- [x] meowim fullscreen text editor with scrolling, cursor navigation, and file save
+- [ ] File and directory deletion
+- [ ] Shell command history (arrow-up recall)
+- [ ] Additional shell built-ins
 
-## WORK STATUS
-- [x] Bootable kernel (GRUB2 / multiboot2)
-- [x] VGA text-mode console with color support
-- [x] GDT and IDT setup
-- [x] PS/2 keyboard driver
-- [x] Shell with built-in commands
-- [x] In-memory filesystem (files + directories, cd/ls/cat/makef/mkdir)
-- [x] meowim fullscreen text editor (open, edit, save, scroll)
-- [ ] File deletion command
-- [ ] Command history (arrow-up recall)
-- [ ] More shell commands
+---
+
+## Credits
+
+- Live demo and GitHub Pages deployment — handled by AI tooling.
+- Everything else — written by hand, line by line.
