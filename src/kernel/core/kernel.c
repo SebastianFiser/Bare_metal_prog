@@ -202,6 +202,8 @@ void init_filesys(void)
 }
 
 void kernel_main(void) {
+    unsigned long last_overlay_redraw_tick = 0;
+
     screen_init();
     console_write("screen initialized\n");
     gdt_install();
@@ -221,6 +223,14 @@ void kernel_main(void) {
     shell_prompt();
 
     for (;;) {
+        unsigned long now = timer_get_ticks();
+
+        // Keep status overlays (like FPS) live even when console text is idle.
+        if (now != last_overlay_redraw_tick) {
+            console_redraw_view();
+            last_overlay_redraw_tick = now;
+        }
+
         keyboard_poll();
         __asm__ volatile ("sti; hlt");
     }
