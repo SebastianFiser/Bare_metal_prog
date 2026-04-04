@@ -2,6 +2,16 @@
 
 #include "console.h"
 
+
+#define PIT_BASE_FREQUENCY 1193182U
+#define TIMER_FREQUENCY 1000U
+#define DIVISOR (PIT_BASE_FREQUENCY / TIMER_FREQUENCY)
+
+void timer_init(void);
+void tick_handler(void);
+unsigned long timer_get_ticks(void);
+void read_uptime(unsigned int *seconds, unsigned int *milliseconds);
+
 /* I/O Port Functions */
 static inline void outb(unsigned short port, unsigned char val) {
     __asm__ __volatile__ ("outb %0, %1" : : "a" (val), "d" (port));

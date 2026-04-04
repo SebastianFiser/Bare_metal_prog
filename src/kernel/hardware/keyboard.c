@@ -50,8 +50,8 @@ void pic_remap(void) {
     outb(0x21, 0x01); io_wait();
     outb(0xA1, 0x01); io_wait();
 
-    // dočasně: jen klávesnice
-    outb(0x21, 0xFD); io_wait();
+    // Allow IRQ0 (timer) and IRQ1 (keyboard), mask the rest on master PIC.
+    outb(0x21, 0xFC); io_wait();
     outb(0xA1, 0xFF); io_wait();
 }
 

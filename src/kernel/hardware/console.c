@@ -1,5 +1,6 @@
 #include "common.h"
 #include "console.h"
+#include "kernel.h"
 
 static unsigned int cursor_x = 0;
 static unsigned int cursor_y = 0;
@@ -16,6 +17,31 @@ static unsigned int hist_line_count = 1;
 static unsigned int scroll_lines_from_bottom = 0;
 static unsigned int view_top_line = 0;
 static bool follow_bottom = true;
+static unsigned long fps_last_tick = 0;
+static unsigned long fps_frame_count = 0;
+static unsigned int fps_value = 0;
+
+#define FPS_OVERLAY_LEN 10
+#define FPS_UPDATE_TICKS (TIMER_FREQUENCY / 10U)
+
+static void fps_make_overlay(char out[FPS_OVERLAY_LEN]) {
+    unsigned int value = fps_value;
+
+    out[0] = ' ';
+    out[1] = 'F';
+    out[2] = 'P';
+    out[3] = 'S';
+    out[4] = ':';
+
+    out[8] = ' ';
+    out[9] = ' ';
+
+    out[7] = (char)('0' + (value % 10));
+    value /= 10;
+    out[6] = (char)('0' + (value % 10));
+    value /= 10;
+    out[5] = (char)('0' + (value % 10));
+}
 
 static unsigned int get_bottom_top_line(void) {
     if (hist_line_count <= VGA_HEIGHT) {
@@ -195,20 +221,33 @@ void screen_init(void) {
     console_redraw_view();
 }
 
-static void scroll(void) {
-    for (unsigned int y = 1; y < VGA_HEIGHT; y ++) {
-        for (unsigned x = 0; x < VGA_WIDTH; x++) {
-            VGA_MEMORY[(y - 1) * VGA_WIDTH + x] = VGA_MEMORY[y * VGA_WIDTH + x];
-        }
-    }
-    unsigned short blank = ((unsigned short)current_color << 8) | ' ';
-    for (unsigned int x = 0; x < VGA_WIDTH; x++) {
-        VGA_MEMORY[(VGA_HEIGHT - 1) * VGA_WIDTH + x] = blank;
-    }
-}
-
 void console_redraw_view(void) {
     unsigned char color = current_color;
+    unsigned long tick_now;
+    unsigned long tick_delta;
+    unsigned int overlay_start = VGA_WIDTH - FPS_OVERLAY_LEN;
+    char fps_overlay[FPS_OVERLAY_LEN];
+
+    fps_frame_count++;
+    tick_now = timer_get_ticks();
+    if (fps_last_tick == 0) {
+        fps_last_tick = tick_now;
+        fps_frame_count = 0;
+    } else {
+        tick_delta = tick_now - fps_last_tick;
+        if (tick_delta >= FPS_UPDATE_TICKS) {
+            unsigned int instant_fps = (unsigned int)((fps_frame_count * TIMER_FREQUENCY) / tick_delta);
+            if (fps_value == 0) {
+                fps_value = instant_fps;
+            } else {
+                fps_value = (fps_value * 3U + instant_fps) / 4U;
+            }
+            fps_frame_count = 0;
+            fps_last_tick = tick_now;
+        }
+    }
+
+    fps_make_overlay(fps_overlay);
 
     for (unsigned int y = 0; y < VGA_HEIGHT; y++) {
         bool row_valid = false;
@@ -228,12 +267,20 @@ void console_redraw_view(void) {
         for (unsigned int x = 0; x < VGA_WIDTH; x++) {
             char ch = row_valid ? history[hist_y][x] : ' ';
             unsigned char cell_color = row_valid ? history_color[hist_y][x] : color;
+
+            if (y == 0 && x >= overlay_start) {
+                ch = fps_overlay[x - overlay_start];
+                cell_color = 0xF4;
+            }
+
             unsigned int vga_index = y * VGA_WIDTH + x;
-            VGA_MEMORY[vga_index] = ((unsigned short)cell_color << 8) | (unsigned char)ch; 
+            VGA_MEMORY[vga_index] = ((unsigned short)cell_color << 8) | (unsigned char)ch;
         }
     }
 
-    console_draw_cursor();
+    if (!(cursor_y == 0 && cursor_x >= overlay_start)) {
+        console_draw_cursor();
+    }
 }
 
 void console_putchar(char c) {

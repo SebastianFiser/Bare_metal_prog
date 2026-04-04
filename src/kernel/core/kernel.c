@@ -49,6 +49,7 @@ struct gdt_ptr gp;
 
 struct idt_entry idt[256];
 struct idt_ptr idtp;
+static volatile unsigned long timer_ticks = 0;
 
 __attribute__((naked)) void idt_load(unsigned int idt_ptr_addr) {
     __asm__ __volatile__ (
@@ -138,11 +139,43 @@ void idt_init(void) {
     idt_load((unsigned int)&idtp);
 }
 
+void timer_init(void) {
+    unsigned short divisor = (unsigned short)DIVISOR;
+
+    // PIT: channel 0, low/high byte, mode 3, binary counter.
+    outb(0x43, 0x36);
+    outb(0x40, (unsigned char)(divisor & 0xFF));
+    outb(0x40, (unsigned char)((divisor >> 8) & 0xFF));
+}
+
+void tick_handler(void) {
+    timer_ticks++;
+}
+
+unsigned long timer_get_ticks(void) {
+    return timer_ticks;
+}
+
+void read_uptime(unsigned int *seconds, unsigned int *milliseconds) {
+    unsigned long ticks;
+    unsigned long total_ms;
+
+    if (!seconds || !milliseconds) {
+        return;
+    }
+
+    ticks = timer_ticks;
+    total_ms = (ticks * 1000U) / TIMER_FREQUENCY;
+    *seconds = total_ms / 1000U;
+    *milliseconds = total_ms % 1000U;
+}
+
 void trap_handler_logic(struct registers *regs) {
     if (regs->int_no == 33) {
         keyboard_handler(regs);
     }
     else if (regs->int_no == 32) {
+        tick_handler();
     outb(0x20, 0x20); // EOI master
     return;
     }
@@ -177,6 +210,8 @@ void kernel_main(void) {
     console_write("IDT installed\n");
     pic_remap();
     console_write("PIC remapped\n");
+    timer_init();
+    console_write("Initializing PIT\n");
     console_write("setting up test files . . .");
     init_filesys();
     console_write("\n");
