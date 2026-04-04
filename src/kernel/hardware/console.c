@@ -9,6 +9,7 @@ static unsigned char current_color = 0x0F;
 #define HISTORY_COLS VGA_WIDTH
 
 static char history[HISTORY_LINES][HISTORY_COLS];
+static unsigned char history_color[HISTORY_LINES][HISTORY_COLS];
 static unsigned int hist_write_line = 0;
 static unsigned int hist_write_col = 0;
 static unsigned int hist_line_count = 1;
@@ -43,6 +44,7 @@ static void apply_scroll_position(void) {
 static void clear_history_line(unsigned int line) {
     for (unsigned int x = 0; x < HISTORY_COLS; x++) {
         history[line][x] = ' ';
+        history_color[line][x] = current_color;
     }
 }
 
@@ -225,8 +227,9 @@ void console_redraw_view(void) {
 
         for (unsigned int x = 0; x < VGA_WIDTH; x++) {
             char ch = row_valid ? history[hist_y][x] : ' ';
+            unsigned char cell_color = row_valid ? history_color[hist_y][x] : color;
             unsigned int vga_index = y * VGA_WIDTH + x;
-            VGA_MEMORY[vga_index] = ((unsigned short)color << 8) | (unsigned char)ch; 
+            VGA_MEMORY[vga_index] = ((unsigned short)cell_color << 8) | (unsigned char)ch; 
         }
     }
 
@@ -238,6 +241,7 @@ void console_putchar(char c) {
         if (hist_write_col > 0) {
             hist_write_col--;
             history[hist_write_line][hist_write_col] = ' ';
+            history_color[hist_write_line][hist_write_col] = current_color;
         } else if (hist_line_count > 1) {
             hist_write_line = (hist_write_line + HISTORY_LINES - 1) % HISTORY_LINES;
             hist_write_col = VGA_WIDTH;
@@ -247,6 +251,7 @@ void console_putchar(char c) {
             if (hist_write_col > 0) {
                 hist_write_col--;
                 history[hist_write_line][hist_write_col] = ' ';
+                history_color[hist_write_line][hist_write_col] = current_color;
             }
         }
         goto redraw;
@@ -262,6 +267,7 @@ void console_putchar(char c) {
     }
 
     history[hist_write_line][hist_write_col] = c;
+    history_color[hist_write_line][hist_write_col] = current_color;
     hist_write_col++;
 
 redraw:
@@ -382,6 +388,70 @@ void console_scroll_down(void) {
     console_redraw_view();
 }
 
+void console_set_color(unsigned char color) {
+    current_color = color;
+}
+
+unsigned char console_get_color(void) {
+    return current_color;
+}
+
+void console_write_colored(unsigned char color, const char* fmt, ...) {
+    unsigned char old_color = current_color;
+    unsigned char effective_color = color ? color : old_color;
+    current_color = effective_color;
+
+    va_list vargs;
+    va_start(vargs, fmt);
+    while (*fmt) {
+        if (*fmt == '%') {
+            fmt++;
+            switch (*fmt) {
+                case '\0':
+                    console_putchar('%');
+                    goto end;
+
+                case '%':
+                    console_putchar('%');
+                    break;
+
+                case 's': {
+                    const char *s = va_arg(vargs, const char *);
+                    if (!s) s = "(null)";
+                    while (*s) {
+                        console_putchar(*s++);
+                    }
+                    break;
+                }
+
+                case 'd': {
+                    int value = va_arg(vargs, int);
+                    console_print_dec(value);
+                    break;
+                }
+
+                case 'x': {
+                    unsigned int value = va_arg(vargs, unsigned int);
+                    console_print_hex(value);
+                    break;
+                }
+
+                default:
+                    console_putchar('%');
+                    console_putchar(*fmt);
+                    break;
+            }
+        } else {
+            console_putchar(*fmt);
+        }
+        fmt++;
+    }
+
+end:
+    va_end(vargs);
+    current_color = old_color;
+}
+
 void console_draw_cursor(void) {
     // Optional: Implement hardware cursor drawing if desired
     if (cursor_x >= VGA_WIDTH) return;
@@ -437,6 +507,7 @@ void console_save_state(console_state_t *state) {
     for (unsigned int y = 0; y < HISTORY_LINES; y++) {
         for (unsigned int x = 0; x < HISTORY_COLS; x++) {
             state->history[y][x] = history[y][x];
+            state->history_color[y][x] = history_color[y][x];
         }
     }
 }
@@ -460,6 +531,7 @@ void console_restore_state(const console_state_t *state) {
     for (unsigned int y = 0; y < HISTORY_LINES; y++) {
         for (unsigned int x = 0; x < HISTORY_COLS; x++) {
             history[y][x] = state->history[y][x];
+            history_color[y][x] = state->history_color[y][x];
         }
     }
 

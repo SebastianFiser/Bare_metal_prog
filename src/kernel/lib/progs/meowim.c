@@ -6,6 +6,7 @@
 
 static console_state_t saved_state;
 static int active = 0;
+static fs_node_t *editor_dir = 0;
 
 #define MEOWIM_BUF_MAX 2048
 #define MEOWIM_NAME_MAX 32
@@ -167,13 +168,14 @@ static void ensure_cursor_visible(void) {
 }
 
 static int meowim_save_file(void) {
-	int create_result = fs_create(current_file);
+	fs_node_t *dir = editor_dir ? editor_dir : fs_root();
+	int create_result = fs_create(dir, current_file, FS_NODE_FILE);
 	if (create_result != 0 && create_result != -2) {
 		return create_result;
 	}
 
 	text_buf[text_len] = '\0';
-	if (fs_write(current_file, text_buf) < 0) {
+	if (fs_write(dir, current_file, text_buf) < 0) {
 		return -1;
 	}
 
@@ -336,10 +338,11 @@ void meowim_open_file(const char *filename) {
 	console_save_state(&saved_state);
 	input_set_mode(MODE_EDITOR);
 	active = 1;
+	editor_dir = shell_get_cwd();
 
 	copy_file_name(filename);
 
-	int read_result = fs_read(current_file, text_buf, MEOWIM_BUF_MAX);
+	int read_result = fs_read(editor_dir ? editor_dir : fs_root(), current_file, text_buf, MEOWIM_BUF_MAX);
 	if (read_result >= 0) {
 		text_len = (unsigned int)read_result;
 	} else {

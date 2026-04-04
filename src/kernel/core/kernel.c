@@ -159,8 +159,13 @@ void trap_handler_logic(struct registers *regs) {
 
 void init_filesys(void)
 {
-    fs_create("readme.txt");
-    fs_write("readme.txt", "This is a simple file system. You can create files with 'makef <filename>', and read them with 'cat <filename>'. Edit function is still work in progress");
+    fs_node_t *root_dir;
+
+    fs_init();
+    root_dir = fs_root();
+
+    fs_create(root_dir, "readme.txt", FS_NODE_FILE);
+    fs_write(root_dir, "readme.txt", "This is a simple file system. You can create files with 'makef <filename>', and read them with 'cat <filename>'. Edit function is still work in progress");
 }
 
 void kernel_main(void) {
