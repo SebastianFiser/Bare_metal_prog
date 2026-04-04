@@ -95,6 +95,8 @@ static const shell_command_t commands[] = {
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
 
 static void cmd_mkdir(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    fs_node_t *existing;
+
     shell_ensure_current_dir();
 
     if (argc < 2) {
@@ -103,7 +105,14 @@ static void cmd_mkdir(int argc, char argv[][SHELL_MAX_TOKEN]) {
     }
 
     if (fs_create(current_dir, argv[1], FS_NODE_DIR) < 0) {
-        console_write_colored(CONSOLE_COLOR_ERROR, "Error creating directory: %s\n", argv[1]);
+        existing = fs_find_child(current_dir, argv[1]);
+        if (existing && existing->type == FS_NODE_DIR) {
+            console_write_colored(CONSOLE_COLOR_ERROR, "mkdir: '%s' already exists as directory\n", argv[1]);
+        } else if (existing && existing->type == FS_NODE_FILE) {
+            console_write_colored(CONSOLE_COLOR_ERROR, "mkdir: '%s' already exists as file\n", argv[1]);
+        } else {
+            console_write_colored(CONSOLE_COLOR_ERROR, "mkdir: cannot create '%s'\n", argv[1]);
+        }
         return;
     }
 
@@ -163,6 +172,8 @@ static void read_file(int argc, char argv[][SHELL_MAX_TOKEN]) {
 }
 
 static void make_file(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    fs_node_t *existing;
+
     shell_ensure_current_dir();
 
     if (argc < 2) {
@@ -171,7 +182,15 @@ static void make_file(int argc, char argv[][SHELL_MAX_TOKEN]) {
     }
 
     if (fs_create(current_dir, argv[1], FS_NODE_FILE) < 0) {
-        console_write_colored(CONSOLE_COLOR_ERROR, "Error creating file: %s\n", argv[1]);
+        existing = fs_find_child(current_dir, argv[1]);
+        if (existing && existing->type == FS_NODE_DIR) {
+            console_write_colored(CONSOLE_COLOR_ERROR, "makef: '%s' already exists as directory\n", argv[1]);
+            console_write_colored(CONSOLE_COLOR_ERROR, "hint: cd %s && makef <new_name>\n", argv[1]);
+        } else if (existing && existing->type == FS_NODE_FILE) {
+            console_write_colored(CONSOLE_COLOR_ERROR, "makef: '%s' already exists as file\n", argv[1]);
+        } else {
+            console_write_colored(CONSOLE_COLOR_ERROR, "makef: cannot create '%s'\n", argv[1]);
+        }
         return;
     }
 
