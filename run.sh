@@ -30,7 +30,7 @@ echo "[1/5] ASM compile"
 nasm -f elf32 "$BOOT_SRC" -o "$BUILD/boot.o"
 
 echo "[2/5] C compile"
-INCLUDE_FLAGS="-I$ROOT_DIR/src/kernel/core -I$ROOT_DIR/src/kernel/lib -I$ROOT_DIR/src/kernel/lib/progs -I$ROOT_DIR/src/kernel/hardware -I$ROOT_DIR/src/kernel/filesystem -I$ROOT_DIR/src/kernel/shell"
+INCLUDE_FLAGS="-I$ROOT_DIR/src/kernel/core -I$ROOT_DIR/src/kernel/lib -I$ROOT_DIR/src/kernel/lib/progs -I$ROOT_DIR/src/kernel/hardware -I$ROOT_DIR/src/kernel/filesystem -I$ROOT_DIR/src/kernel/shell -I$ROOT_DIR/src/kernel/memory"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$KERNEL_SRC" -o "$BUILD/kernel.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$COMMON_SRC" -o "$BUILD/common.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$CONSOLE_SRC" -o "$BUILD/console.o"

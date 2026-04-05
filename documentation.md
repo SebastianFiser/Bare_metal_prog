@@ -2,6 +2,13 @@
 
 This document lists the main high-level APIs exposed by the kernel modules and how to use them.
 
+## Project Description (Short)
+DUMB KERNEL is a small educational 32-bit bare-metal kernel for x86.
+It boots via GRUB, runs in VGA text mode, handles keyboard interrupts,
+and includes a simple shell, an in-memory filesystem, and a fullscreen text editor.
+It also provides PIT-based timer services (uptime and FPS updates)
+and a basic heap allocator for dynamic memory.
+
 ## 1. Console API
 Source: src/kernel/hardware/console.h
 
@@ -224,6 +231,34 @@ Typical usage:
 
 ---
 
+## 8. Memory / Heap API
+Source: src/kernel/memory/heap.h
+
+Purpose:
+- Provide dynamic memory allocation inside kernel space.
+- Manage heap blocks using a linked-list allocator with block splitting.
+- Offer debugging and integrity checks for allocator behavior.
+
+Main APIs:
+- `void heap_init(void)`
+: Initialize heap metadata and create the first large free block.
+- `void* kmalloc(size_t size)`
+: Allocate memory from heap, align request, optionally split block, return payload pointer.
+- `void kfree(void* ptr)`
+: Mark a block as free and coalesce adjacent free blocks.
+- `void heap_dump(void)`
+: Print all current heap blocks (address, size, free flag, next pointer) for debugging.
+- `void heap_validate(void)`
+: Validate allocator invariants (bounds, order, and basic list integrity).
+
+Typical usage:
+- Call `heap_init()` once during kernel boot.
+- Use `kmalloc()` for runtime allocations.
+- Use `kfree()` when blocks are no longer needed.
+- Use `heap_dump()` and `heap_validate()` while debugging splits/fragmentation.
+
+---
+
 ## Integration Pattern (High-Level Flow)
 1. IRQ1 keyboard interrupt captures scancode.
 2. Keyboard layer maps scancode and queues semantic input events.
@@ -231,6 +266,7 @@ Typical usage:
 4. Input router dispatches to shell or editor based on UI mode.
 5. Subsystem writes output through Console API.
 6. Timer IRQ updates ticks used by uptime and periodic overlays.
+7. Heap API provides dynamic memory for kernel subsystems.
 
 ---
 

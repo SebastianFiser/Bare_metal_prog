@@ -3,6 +3,7 @@
 #include "console.h"
 #include "shell.h"
 #include "filesys.h"
+#include "heap.h"
 
 __attribute__((naked)) void gdt_flush(unsigned int gdt_ptr_addr) {
     __asm__ __volatile__ (
@@ -203,6 +204,8 @@ void init_filesys(void)
 
 void kernel_main(void) {
     unsigned long last_overlay_redraw_tick = 0;
+    void *a = NULL;
+    void *b = NULL;
 
     screen_init();
     console_write("screen initialized\n");
@@ -214,6 +217,8 @@ void kernel_main(void) {
     console_write("PIC remapped\n");
     timer_init();
     console_write("Initializing PIT\n");
+    heap_init();
+    console_write("heap initialized\n");
     console_write("setting up test files . . .\n");
     init_filesys();
     console_write("\n");
@@ -222,6 +227,17 @@ void kernel_main(void) {
     console_write("\n");
     console_write("welcome to my kernel, type 'help' for a list of commands\n");
     console_write("\n");
+    a = kmalloc(100);
+    b = kmalloc(1024);
+    if (a && b) {
+        console_write("heap test alloc OK\n");
+    } else {
+        console_write("heap test alloc FAIL\n");
+    }
+    heap_dump();
+    heap_validate();
+    console_write("heap validate OK\n");
+
     shell_prompt();
 
     for (;;) {
