@@ -1,7 +1,7 @@
 #pragma once
 #include "kernel.h"
 
-#define HEAP_SIZE (1024 * 1024 * 64) // 64 MiB
+#define HEAP_SIZE (1024 * 1024 * 8) // 64 MiB
 typedef unsigned int size_t;
 static unsigned char heap[HEAP_SIZE];
 
