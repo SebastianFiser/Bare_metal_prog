@@ -1,9 +1,8 @@
 #pragma once
 #include "kernel.h"
 
-#define HEAP_SIZE (1024 * 1024 * 8) // 64 MiB
+#define HEAP_SIZE (1024 * 1024 * 8) // 8 MiB
 typedef unsigned int size_t;
-static unsigned char heap[HEAP_SIZE];
 
 typedef struct block {
     size_t size;
@@ -16,8 +15,6 @@ typedef struct block {
     if (!(x)) { \
         PANIC("Assertion failed: %s\n" #x); \
     }
-
-static block_t* free_list;
 
 void heap_init(void);
 void* kmalloc(size_t size);

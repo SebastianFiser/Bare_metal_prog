@@ -1,6 +1,9 @@
 #include "heap.h"
 #include "console.h"
 
+static unsigned char heap[HEAP_SIZE];
+static block_t* free_list;
+
 static int ptr_in_heap(const void *ptr) {
     const unsigned char *p = (const unsigned char*)ptr;
     const unsigned char *start = &heap[0];
