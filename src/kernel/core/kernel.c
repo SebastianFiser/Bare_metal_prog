@@ -214,8 +214,10 @@ void kernel_main(void) {
     console_write("PIC remapped\n");
     timer_init();
     console_write("Initializing PIT\n");
-    console_write("setting up test files . . .");
+    console_write("setting up test files . . .\n");
     init_filesys();
+    console_write("\n");
+    console_write_ascii("logo");
     console_write("\n");
     console_write("\n");
     console_write("welcome to my kernel, type 'help' for a list of commands\n");

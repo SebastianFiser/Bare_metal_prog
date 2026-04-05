@@ -499,6 +499,42 @@ end:
     current_color = old_color;
 }
 
+void console_write_ascii(const char* name) {
+    if (!name || strcmp(name, "help") == 0) {
+        console_write("ASCII presets: cat, skull, logo\n");
+        return;
+    }
+
+    if (strcmp(name, "cat") == 0) {
+        console_write(" /\\_/\\\n");
+        console_write("( o.o )\n");
+        console_write(" > ^ <\n");
+        return;
+    }
+
+    if (strcmp(name, "skull") == 0) {
+        console_write("  .-\\\"\\\"-.\n");
+        console_write(" / -   - \\\n");
+        console_write("|  .-.  |\n");
+        console_write("|  \\\_/  |\n");
+        console_write(" \\     /\n");
+        console_write("  '---'\n");
+        return;
+    }
+
+    if (strcmp(name, "logo") == 0) {
+        console_write("DDDD   U   U  M   M  BBBB     K   K  EEEEE  RRRR   N   N  EEEEE  L\n");
+        console_write("D   D  U   U  MM MM  B   B    K  K   E      R   R  NN  N  E      L\n");
+        console_write("D   D  U   U  M M M  BBBB     KKK    EEEE   RRRR   N N N  EEEE   L\n");
+        console_write("D   D  U   U  M   M  B   B    K  K   E      R  R   N  NN  E      L\n");
+        console_write("DDDD    UUU   M   M  BBBB     K   K  EEEEE  R   R  N   N  EEEEE  LLLLL\n");
+        return;
+    }
+
+    console_write_colored(CONSOLE_COLOR_ERROR, "Unknown ASCII preset: %s\n", name);
+    console_write("Use: help\n");
+}
+
 void console_draw_cursor(void) {
     // Optional: Implement hardware cursor drawing if desired
     if (cursor_x >= VGA_WIDTH) return;

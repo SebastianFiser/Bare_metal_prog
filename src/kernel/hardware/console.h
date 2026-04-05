@@ -28,6 +28,7 @@ void console_scroll_down(void);
 void console_set_color(unsigned char color);
 unsigned char console_get_color(void);
 void console_write_colored(unsigned char color, const char* fmt, ...);
+void console_write_ascii(const char* name);
 void write_text(unsigned int x, unsigned int y, unsigned char color, const char* fmt, ...);
 
 typedef struct {
