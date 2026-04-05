@@ -35,7 +35,7 @@ jobs:
         run: |
           set -e
           mkdir -p iso/boot/grub build
-          INCLUDE_FLAGS="-Isrc/kernel/core -Isrc/kernel/lib -Isrc/kernel/lib/progs -Isrc/kernel/hardware -Isrc/kernel/filesystem -Isrc/kernel/shell"
+          INCLUDE_FLAGS="-Isrc/kernel/core -Isrc/kernel/lib -Isrc/kernel/lib/progs -Isrc/kernel/hardware -Isrc/kernel/filesystem -Isrc/kernel/shell -Isrc/kernel/memory"
           nasm -f elf32 src/boot/boot.asm -o build/boot.o
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/core/kernel.c -o build/kernel.o
           gcc -ffreestanding -m32 $INCLUDE_FLAGS -c src/kernel/lib/common.c -o build/common.o
