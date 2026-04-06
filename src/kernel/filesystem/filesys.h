@@ -13,8 +13,10 @@ typedef struct fs_node {
     struct fs_node *parent;
     struct fs_node *children[16];
     unsigned int child_count;
-    char data[512];
+
+    char *data;
     unsigned int size;
+    unsigned int capacity;
 } fs_node_t;
 
 void fs_init(void);
@@ -27,3 +29,5 @@ int fs_create(fs_node_t *parent, const char* name, fs_node_type_t type);
 int fs_write(fs_node_t *cwd, const char* name, const char* data);
 int fs_read(fs_node_t *cwd, const char* name, char* out, int out_size);
 int fs_list_dir(fs_node_t *dir);
+
+int fs_delete(fs_node_t *cwd, const char *path);

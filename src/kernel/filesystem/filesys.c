@@ -1,11 +1,8 @@
 #include "filesys.h"
 #include "common.h"
 #include "console.h"
+#include "heap.h"
 
-#define MAX_NODES 64
-
-static fs_node_t nodes[MAX_NODES];
-static unsigned int node_count = 0;
 static fs_node_t *root = 0;
 
 static int fs_strlen_local(const char* str) {
@@ -33,10 +30,8 @@ static int fs_has_slash(const char *name) {
 }
 
 static fs_node_t *fs_alloc_node(void) {
-    if (node_count >= MAX_NODES) {
-        return 0;
-    }
-    fs_node_t *node = &nodes[node_count++];
+    fs_node_t *node = (fs_node_t *)kmalloc(sizeof(fs_node_t));
+    if (!node) return 0;
     memset(node, 0, sizeof(fs_node_t));
     return node;
 }
@@ -138,6 +133,8 @@ int fs_create(fs_node_t *parent, const char* name, fs_node_type_t type) {
     node->type = type;
     node->parent = parent;
     node->size = 0;
+    node->data = 0;
+    node->capacity = 0;
     parent->children[parent->child_count++] = node;
 
     return 0;
@@ -146,6 +143,8 @@ int fs_create(fs_node_t *parent, const char* name, fs_node_type_t type) {
 int fs_write(fs_node_t *cwd, const char* name, const char* data) {
     fs_node_t *node;
     int data_len;
+    unsigned int needed;
+    char *new_buf;
 
     if (!cwd || !name || !data) {
         return -1;
@@ -157,11 +156,30 @@ int fs_write(fs_node_t *cwd, const char* name, const char* data) {
     }
 
     data_len = fs_strlen_local(data);
-    if (data_len >= (int)sizeof(node->data)) {
-        data_len = sizeof(node->data) - 1;
+    if (data_len < 0) {
+        return -1;
     }
 
-    memset(node->data, 0, sizeof(node->data));
+    needed = (unsigned int)data_len + 1; // include '\0'
+
+    if (node->capacity < needed) {
+        new_buf = (char*)kmalloc(needed);
+        if (!new_buf) {
+            return -3; // no memory
+        }
+
+        if (node->data && node->size > 0) {
+            memcpy(new_buf, node->data, node->size);
+        }
+
+        if (node->data) {
+            kfree(node->data);
+        }
+
+        node->data = new_buf;
+        node->capacity = needed;
+    }
+
     memcpy(node->data, data, (size_t)data_len);
     node->data[data_len] = '\0';
     node->size = (unsigned int)data_len;
@@ -179,6 +197,13 @@ int fs_read(fs_node_t *cwd, const char* name, char* out, int out_size) {
     node = fs_resolve_path(cwd, name);
     if (!node || node->type != FS_NODE_FILE) {
         return -2;
+    }
+
+    if(!node->data) {
+        if (out_size < 1) return -3;
+        out[0] = '\0';
+        return 0;
+
     }
 
     if ((int)node->size + 1 > out_size) {
@@ -246,7 +271,6 @@ void fs_get_path(fs_node_t *dir, char *out, int out_size) {
 }
 
 void fs_init(void) {
-    node_count = 0;
     root = fs_alloc_node();
     if (!root) {
         return;
@@ -259,4 +283,56 @@ void fs_init(void) {
     fs_create(root, "home", FS_NODE_DIR);
     fs_create(root, "tmp", FS_NODE_DIR);
     fs_create(root, "readme.txt", FS_NODE_FILE);
+}
+
+static int fs_find_child_index(fs_node_t *parent, fs_node_t *child) {
+    unsigned int i;
+    if (!parent || !child) return -1;
+    for (i = 0; i < parent->child_count; i++) {
+        if (parent->children[i] == child) return (int)i;
+    }
+    return -1;
+}
+
+static void fs_free_subtree(fs_node_t *node) {
+    while (node->child_count > 0) {
+        fs_node_t *last = node->children[node->child_count - 1];
+        fs_free_subtree(last);
+        node->child_count--;
+    }
+
+    if (node->data) {
+        kfree(node->data);
+        node->data = 0;
+        node->capacity = 0;
+        node->size = 0;
+    }
+
+    kfree(node);
+}
+
+int fs_delete(fs_node_t *cwd, const char *path) {
+    fs_node_t *node;
+    fs_node_t *parent;
+    int idx;
+    unsigned int i;
+
+    if (!cwd || !path || !path[0]) return -1;
+
+    node = fs_resolve_path(cwd, path);
+    if (!node || node == root) return -2;
+
+    parent = node->parent;
+    if (!parent) return -2;
+
+    idx = fs_find_child_index(parent, node);
+    if (idx < 0) return -2;
+
+    for (i = (unsigned int)idx; i + 1 < parent->child_count; i++) {
+        parent->children[i] = parent->children[i + 1];
+    }
+    parent->child_count--;
+
+    fs_free_subtree(node);
+    return 0;
 }

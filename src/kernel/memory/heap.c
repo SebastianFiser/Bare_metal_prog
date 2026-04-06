@@ -1,6 +1,7 @@
 #include "heap.h"
 #include "console.h"
 
+__attribute__((aligned(8)))
 static unsigned char heap[HEAP_SIZE];
 static block_t* free_list;
 
@@ -21,6 +22,7 @@ void heap_init() {
 
 //size = (size + 7) & ~7;
 void* kmalloc(size_t size) {
+    if (size == 0) return NULL;
     //align size
     size = (size + 7) & ~7;
 
@@ -33,10 +35,12 @@ void* kmalloc(size_t size) {
                 new_block->size = curr->size - size - sizeof(block_t);
                 new_block->free = 1;
                 new_block->next = curr->next;
+                new_block->magic = HEAP_MAGIC;
                 curr->size = size;
                 curr->next = new_block;
             }
             curr->free = 0;
+            curr->magic = HEAP_MAGIC;
             console_write("allocated %d bytes\n", size);
             return (void*)(curr+1);
         }
@@ -54,16 +58,21 @@ void kfree(void* ptr) {
     }
 
     curr = ((block_t*)ptr) - 1;
+    console_write("block free=%d size=%d\n", curr->free, curr->size);
+    heap_dump();
+    ASSERT(curr->free == 0);
+    ASSERT(curr->magic == HEAP_MAGIC);
     if (!ptr_in_heap(curr)) {
         PANIC("kfree: pointer outside heap");
     }
 
+    ASSERT(curr->free == 0);
     curr->free = 1;
 
     // Coalesce adjacent free blocks to reduce fragmentation.
     curr = free_list;
     while (curr && curr->next) {
-        if (curr->free && curr->next->free) {
+        if (curr->free && curr->next->free && (char*)curr + sizeof(block_t) + curr->size == (char*)curr->next) {
             curr->size += sizeof(block_t) + curr->next->size;
             curr->next = curr->next->next;
             continue;

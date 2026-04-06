@@ -4,6 +4,7 @@
 #include "shell.h"
 #include "filesys.h"
 #include "heap.h"
+#include "input.h"
 
 __attribute__((naked)) void gdt_flush(unsigned int gdt_ptr_addr) {
     __asm__ __volatile__ (
@@ -205,7 +206,6 @@ void init_filesys(void)
 void kernel_main(void) {
     unsigned long last_overlay_redraw_tick = 0;
     void *a = NULL;
-    void *b = NULL;
 
     screen_init();
     console_write("screen initialized\n");
@@ -227,24 +227,19 @@ void kernel_main(void) {
     console_write("\n");
     console_write("welcome to my kernel, type 'help' for a list of commands\n");
     console_write("\n");
-    a = kmalloc(100);
-    b = kmalloc(1024);
-    if (a && b) {
-        console_write("heap test alloc OK\n");
-    } else {
-        console_write("heap test alloc FAIL\n");
-    }
+    a = kmalloc(1024);
     heap_dump();
-    heap_validate();
-    console_write("heap validate OK\n");
+    kfree(a);
+    console_write("kfree ptr=0x%x\n", a);
+    heap_dump();
 
     shell_prompt();
 
     for (;;) {
         unsigned long now = timer_get_ticks();
 
-        // Keep status overlays (like FPS) live even when console text is idle.
-        if (now != last_overlay_redraw_tick) {
+        // Keep status overlays live, but do not overwrite fullscreen editor.
+        if (input_get_mode() == MODE_SHELL && now != last_overlay_redraw_tick) {
             console_redraw_view();
             last_overlay_redraw_tick = now;
         }

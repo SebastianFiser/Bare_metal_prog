@@ -1,10 +1,12 @@
 #pragma once
 #include "kernel.h"
 
+#define HEAP_MAGIC 0xDEADBEEF
 #define HEAP_SIZE (1024 * 1024 * 8) // 8 MiB
 typedef unsigned int size_t;
 
 typedef struct block {
+    unsigned int magic;
     size_t size;
     int free;
     struct block* next;
