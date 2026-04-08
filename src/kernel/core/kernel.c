@@ -5,6 +5,10 @@
 #include "filesys.h"
 #include "heap.h"
 #include "input.h"
+#include "meowim.h"
+#include "screen.h"
+
+static console_state_t vga_boot_state;
 
 __attribute__((naked)) void gdt_flush(unsigned int gdt_ptr_addr) {
     __asm__ __volatile__ (
@@ -203,9 +207,8 @@ void init_filesys(void)
     fs_write(root_dir, "readme.txt", "This is a simple file system. You can create files with 'makef <filename>', and read them with 'cat <filename>'. Edit function is still work in progress");
 }
 
-void kernel_main(void) {
+static void VGA_INIT(uint32_t multiboot_info_ptr) {
     unsigned long last_overlay_redraw_tick = 0;
-    void *a = NULL;
 
     screen_init();
     console_write("screen initialized\n");
@@ -228,6 +231,8 @@ void kernel_main(void) {
     console_write("welcome to my kernel, type 'help' for a list of commands\n");
     console_write("\n");
     shell_prompt();
+    fb_init(multiboot_info_ptr);
+    console_save_state(&vga_boot_state);
 
     for (;;) {
         unsigned long now = timer_get_ticks();
@@ -241,4 +246,14 @@ void kernel_main(void) {
         keyboard_poll();
         __asm__ volatile ("sti; hlt");
     }
+}
+
+void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_ptr) {
+    if (multiboot_magic != 0x36d76289U) {
+        for (;;) {
+            __asm__ volatile ("cli; hlt");
+        }
+    }
+
+    VGA_INIT(multiboot_info_ptr);
 }

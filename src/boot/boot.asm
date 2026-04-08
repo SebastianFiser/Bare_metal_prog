@@ -9,6 +9,15 @@ header_start:
     dd header_end - header_start
     dd -(0xE85250D6 + 0 + (header_end - header_start))
 
+    dw 5            ; framebuffer request tag
+    dw 0
+    dd 20
+    dd 0            ; width = any
+    dd 0            ; height = any
+    dd 32           ; depth = 32 bpp
+
+    align 8
+
     dw 0            ; end tag type
     dw 0            ; end tag flags
     dd 8            ; end tag size
@@ -23,7 +32,8 @@ _start:
     cli
 
     mov esp, stack_top
-
+    push ebx
+    push eax
     call kernel_main
 
 .hang:
