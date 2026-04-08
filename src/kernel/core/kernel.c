@@ -243,5 +243,6 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_ptr) {
 
     fb_init(multiboot_info_ptr);
     fb_clear(0x00FF0000);
+    fb_fill_rect(67, 67, 20, 20, 0x00FFFFFF);
     VGA_INIT(multiboot_info_ptr);
 }
