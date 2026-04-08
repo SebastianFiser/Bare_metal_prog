@@ -18,6 +18,7 @@ INPUT_SRC="$ROOT_DIR/src/kernel/shell/input.c"
 FILESYS_SRC="$ROOT_DIR/src/kernel/filesystem/filesys.c"
 MEOWIM_SRC="$ROOT_DIR/src/kernel/lib/progs/meowim.c"
 HEAP_SRC="$ROOT_DIR/src/kernel/memory/heap.c"
+SCREEN_SRC="$ROOT_DIR/src/kernel/hardware/screen.c"
 
 echo "[CLEAN]"
 rm -rf "$BUILD" "$ISO" "$OUTPUT_ISO"
@@ -40,11 +41,13 @@ gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$INPUT_SRC" -o "$BUILD/input.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$FILESYS_SRC" -o "$BUILD/filesys.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$MEOWIM_SRC" -o "$BUILD/meowim.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$HEAP_SRC" -o "$BUILD/heap.o"
+gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$SCREEN_SRC" -o "$BUILD/screen.o"
+
 
 echo "[3/5] LINK"
 ld -m elf_i386 -T "$LINKER_SCRIPT" -o "$BUILD/$KERNEL" \
     "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o" "$BUILD/console.o" "$BUILD/keyboard.o" "$BUILD/shell.o" "$BUILD/input.o" \
-    "$BUILD/filesys.o" "$BUILD/meowim.o" "$BUILD/heap.o"
+    "$BUILD/filesys.o" "$BUILD/meowim.o" "$BUILD/heap.o" "$BUILD/screen.o"
 
 echo "[4/5] COPY"
 cp "$BUILD/$KERNEL" "$ISO/boot/"

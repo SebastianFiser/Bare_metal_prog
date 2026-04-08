@@ -227,12 +227,6 @@ void kernel_main(void) {
     console_write("\n");
     console_write("welcome to my kernel, type 'help' for a list of commands\n");
     console_write("\n");
-    a = kmalloc(1024);
-    heap_dump();
-    kfree(a);
-    console_write("kfree ptr=0x%x\n", a);
-    heap_dump();
-
     shell_prompt();
 
     for (;;) {
