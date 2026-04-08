@@ -66,3 +66,39 @@ void fb_init(uint32_t multiboot_info_ptr) {
 
     console_write("fb_init: framebuffer tag not found\n");
 }
+
+void fb_clear(uint32_t color) {
+    for (uint32_t y = 0; y < fb.height; y++) {
+        for (uint32_t x = 0; x < fb.width; x++) {
+            fb_putpixel(x, y, color);
+        }
+    }
+}
+
+void fb_putpixel(uint32_t x, uint32_t y, uint32_t color) {
+    uint8_t* row;
+    uint32_t* pixel;
+
+    if (x >= fb.width || y >= fb.height || fb.address == NULL) {
+        return;
+    }
+
+    row = (uint8_t*)fb.address + (y * fb.pitch);
+    pixel = (uint32_t*)(row + (x * (fb.bpp / 8)));
+    *pixel = color;
+}
+
+void fb_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint32_t color) {
+    uint32_t yy;
+    uint32_t xx;
+
+    for (yy = 0; yy < height; yy++) {
+        for (xx = 0; xx < width; xx++) {
+            fb_putpixel(x + xx, y + yy, color);
+        }
+    }
+}
+
+void fb_present() {
+    // No-op for now: we render directly into the hardware framebuffer.
+}

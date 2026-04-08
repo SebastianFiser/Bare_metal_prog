@@ -211,27 +211,13 @@ static void VGA_INIT(uint32_t multiboot_info_ptr) {
     unsigned long last_overlay_redraw_tick = 0;
 
     screen_init();
-    console_write("screen initialized\n");
     gdt_install();
-    console_write("GDT installed\n");
     idt_init();
-    console_write("IDT installed\n");
     pic_remap();
-    console_write("PIC remapped\n");
     timer_init();
-    console_write("Initializing PIT\n");
     heap_init();
-    console_write("heap initialized\n");
-    console_write("setting up test files . . .\n");
     init_filesys();
-    console_write("\n");
-    console_write_ascii("logo");
-    console_write("\n");
-    console_write("\n");
-    console_write("welcome to my kernel, type 'help' for a list of commands\n");
-    console_write("\n");
     shell_prompt();
-    fb_init(multiboot_info_ptr);
     console_save_state(&vga_boot_state);
 
     for (;;) {
@@ -255,5 +241,7 @@ void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_ptr) {
         }
     }
 
+    fb_init(multiboot_info_ptr);
+    fb_clear(0x00FF0000);
     VGA_INIT(multiboot_info_ptr);
 }
