@@ -4,6 +4,9 @@
 #include "input.h"
 #include "meowim.h"
 #include "shell.h"
+#include "heap.h"
+#include "renderer.h"
+#include "screen.h"
 
 #define SHELL_MAX_ARGS 8
 #define SHELL_MAX_TOKEN 32
@@ -77,6 +80,8 @@ static void make_file(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void edit_file(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_cd(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_mkdir(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_heap_dump(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_heap_validate(int argc, char argv[][SHELL_MAX_TOKEN]);
 
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
@@ -90,9 +95,19 @@ static const shell_command_t commands[] = {
     {"edit", "open meowim editor, usage: edit <filename>", edit_file},
     {"cd", "change the current directory", cmd_cd},
     {"mkdir", "create a new directory", cmd_mkdir},
+    {"memdump", "dump heap metadata for debugging", cmd_heap_dump},
+    {"memvalidate", "validate heap integrity for debugging", cmd_heap_validate},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void cmd_heap_dump(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    heap_dump();
+}
+
+static void cmd_heap_validate(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    heap_validate();
+}
 
 static void cmd_mkdir(int argc, char argv[][SHELL_MAX_TOKEN]) {
     fs_node_t *existing;

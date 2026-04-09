@@ -1,7 +1,7 @@
 #pragma once
 
 #include "console.h"
-
+#include "renderer.h"
 
 #define PIT_BASE_FREQUENCY 1193182U
 #define TIMER_FREQUENCY 100U

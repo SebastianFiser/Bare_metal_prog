@@ -41,7 +41,6 @@ void* kmalloc(size_t size) {
             }
             curr->free = 0;
             curr->magic = HEAP_MAGIC;
-            console_write("allocated %d bytes\n", size);
             return (void*)(curr+1);
         }
         curr = curr->next; 

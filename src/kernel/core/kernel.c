@@ -211,12 +211,23 @@ static void VGA_INIT(uint32_t multiboot_info_ptr) {
     unsigned long last_overlay_redraw_tick = 0;
 
     screen_init();
+    console_write("VGA fallback initialized\n");
     gdt_install();
+    console_write("gdt active\n");
     idt_init();
+    console_write("idt active\n");
     pic_remap();
+    console_write("PIC remapped\n");
     timer_init();
+    console_write("timer initialized\n");
     heap_init();
+    console_write("heap initialized\n");
     init_filesys();
+    console_write("file system initialized\n");
+    console_set_color(0x0E);
+    console_write_ascii("logo");
+    console_set_color(0x0F);
+    console_write("If you dont know where to start, try 'help' command.\n");
     shell_prompt();
     console_save_state(&vga_boot_state);
 
@@ -236,13 +247,17 @@ static void VGA_INIT(uint32_t multiboot_info_ptr) {
 
 void kernel_main(uint32_t multiboot_magic, uint32_t multiboot_info_ptr) {
     if (multiboot_magic != 0x36d76289U) {
-        for (;;) {
-            __asm__ volatile ("cli; hlt");
+        for ( ;;) {
+            __asm__ volatile("cli; hlt");
         }
     }
 
     fb_init(multiboot_info_ptr);
-    fb_clear(0x00FF0000);
-    fb_fill_rect(67, 67, 20, 20, 0x00FFFFFF);
+    if (fb_is_available()) {
+        renderer_set_mode(RENDER_FB);
+    } else {
+        renderer_set_mode(RENDER_VGA);
+    }
+
     VGA_INIT(multiboot_info_ptr);
 }

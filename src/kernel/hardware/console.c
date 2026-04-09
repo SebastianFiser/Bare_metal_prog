@@ -1,6 +1,8 @@
 #include "common.h"
 #include "console.h"
 #include "kernel.h"
+#include "renderer.h"
+#include "screen.h"
 
 static unsigned int cursor_x = 0;
 static unsigned int cursor_y = 0;
@@ -17,30 +19,41 @@ static unsigned int hist_line_count = 1;
 static unsigned int scroll_lines_from_bottom = 0;
 static unsigned int view_top_line = 0;
 static bool follow_bottom = true;
-static unsigned long fps_last_tick = 0;
-static unsigned long fps_frame_count = 0;
-static unsigned int fps_value = 0;
 
-#define FPS_OVERLAY_LEN 10
-#define FPS_UPDATE_TICKS (TIMER_FREQUENCY / 10U)
+static char fb_prev_chars[VGA_HEIGHT][VGA_WIDTH];
+static unsigned char fb_prev_colors[VGA_HEIGHT][VGA_WIDTH];
+static bool fb_prev_valid[VGA_HEIGHT][VGA_WIDTH];
+static unsigned int fb_prev_cursor_x = VGA_WIDTH;
+static unsigned int fb_prev_cursor_y = VGA_HEIGHT;
+static render_mode_t last_render_mode = RENDER_VGA;
 
-static void fps_make_overlay(char out[FPS_OVERLAY_LEN]) {
-    unsigned int value = fps_value;
+static uint32_t vga_index_to_rgb(unsigned char index) {
+    static const uint32_t palette[16] = {
+        0x00000000, 0x000000AA, 0x0000AA00, 0x0000AAAA,
+        0x00AA0000, 0x00AA00AA, 0x00AA5500, 0x00AAAAAA,
+        0x00555555, 0x005555FF, 0x0055FF55, 0x0055FFFF,
+        0x00FF5555, 0x00FF55FF, 0x00FFFF55, 0x00FFFFFF
+    };
 
-    out[0] = ' ';
-    out[1] = 'F';
-    out[2] = 'P';
-    out[3] = 'S';
-    out[4] = ':';
+    return palette[index & 0x0F];
+}
 
-    out[8] = ' ';
-    out[9] = ' ';
+static void decode_vga_cell_color(unsigned char cell_color, uint32_t *fg, uint32_t *bg) {
+    unsigned char fg_idx = cell_color & 0x0F;
+    unsigned char bg_idx = (cell_color >> 4) & 0x0F;
 
-    out[7] = (char)('0' + (value % 10));
-    value /= 10;
-    out[6] = (char)('0' + (value % 10));
-    value /= 10;
-    out[5] = (char)('0' + (value % 10));
+    *fg = vga_index_to_rgb(fg_idx);
+    *bg = vga_index_to_rgb(bg_idx);
+}
+
+static void fb_invalidate_cache(void) {
+    for (unsigned int y = 0; y < VGA_HEIGHT; y++) {
+        for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+            fb_prev_valid[y][x] = false;
+        }
+    }
+    fb_prev_cursor_x = VGA_WIDTH;
+    fb_prev_cursor_y = VGA_HEIGHT;
 }
 
 static unsigned int get_bottom_top_line(void) {
@@ -218,36 +231,21 @@ void screen_init(void) {
 
     cursor_x = 0;
     cursor_y = 0;
+    fb_invalidate_cache();
     console_redraw_view();
 }
 
 void console_redraw_view(void) {
+    bool use_fb = (renderer_get_mode() == RENDER_FB);
     unsigned char color = current_color;
-    unsigned long tick_now;
-    unsigned long tick_delta;
-    unsigned int overlay_start = VGA_WIDTH - FPS_OVERLAY_LEN;
-    char fps_overlay[FPS_OVERLAY_LEN];
 
-    fps_frame_count++;
-    tick_now = timer_get_ticks();
-    if (fps_last_tick == 0) {
-        fps_last_tick = tick_now;
-        fps_frame_count = 0;
-    } else {
-        tick_delta = tick_now - fps_last_tick;
-        if (tick_delta >= FPS_UPDATE_TICKS) {
-            unsigned int instant_fps = (unsigned int)((fps_frame_count * TIMER_FREQUENCY) / tick_delta);
-            if (fps_value == 0) {
-                fps_value = instant_fps;
-            } else {
-                fps_value = (fps_value * 3U + instant_fps) / 4U;
-            }
-            fps_frame_count = 0;
-            fps_last_tick = tick_now;
-        }
+    if (use_fb && last_render_mode != RENDER_FB) {
+        fb_invalidate_cache();
     }
 
-    fps_make_overlay(fps_overlay);
+    if (use_fb && fb_prev_cursor_x < VGA_WIDTH && fb_prev_cursor_y < VGA_HEIGHT) {
+        fb_prev_valid[fb_prev_cursor_y][fb_prev_cursor_x] = false;
+    }
 
     for (unsigned int y = 0; y < VGA_HEIGHT; y++) {
         bool row_valid = false;
@@ -268,19 +266,40 @@ void console_redraw_view(void) {
             char ch = row_valid ? history[hist_y][x] : ' ';
             unsigned char cell_color = row_valid ? history_color[hist_y][x] : color;
 
-            if (y == 0 && x >= overlay_start) {
-                ch = fps_overlay[x - overlay_start];
-                cell_color = 0xF4;
-            }
+            if (use_fb) {
+                if (x == cursor_x && y == cursor_y) {
+                    unsigned char fg = cell_color & 0x0F;
+                    unsigned char bg = (cell_color >> 4) & 0x0F;
+                    cell_color = (unsigned char)((fg << 4) | bg);
+                }
 
-            unsigned int vga_index = y * VGA_WIDTH + x;
-            VGA_MEMORY[vga_index] = ((unsigned short)cell_color << 8) | (unsigned char)ch;
+                if (fb_prev_valid[y][x] && fb_prev_chars[y][x] == ch && fb_prev_colors[y][x] == cell_color) {
+                    continue;
+                }
+
+                uint32_t fg_rgb;
+                uint32_t bg_rgb;
+                decode_vga_cell_color(cell_color, &fg_rgb, &bg_rgb);
+                fb_draw_char(x * FB_CELL_WIDTH, y * FB_CELL_HEIGHT, ch, fg_rgb, bg_rgb);
+                fb_prev_chars[y][x] = ch;
+                fb_prev_colors[y][x] = cell_color;
+                fb_prev_valid[y][x] = true;
+                continue;
+            } else {
+                unsigned int vga_index = y * VGA_WIDTH + x;
+                VGA_MEMORY[vga_index] = ((unsigned short)cell_color << 8) | (unsigned char)ch;
+            }
         }
     }
 
-    if (!(cursor_y == 0 && cursor_x >= overlay_start)) {
+    if (use_fb) {
+        fb_prev_cursor_x = cursor_x;
+        fb_prev_cursor_y = cursor_y;
+    } else {
         console_draw_cursor();
     }
+
+    last_render_mode = renderer_get_mode();
 }
 
 void console_putchar(char c) {
@@ -512,16 +531,6 @@ void console_write_ascii(const char* name) {
         return;
     }
 
-    if (strcmp(name, "skull") == 0) {
-        console_write("  .-\\\"\\\"-.\n");
-        console_write(" / -   - \\\n");
-        console_write("|  .-.  |\n");
-        console_write("|  \\\_/  |\n");
-        console_write(" \\     /\n");
-        console_write("  '---'\n");
-        return;
-    }
-
     if (strcmp(name, "logo") == 0) {
         console_write("DDDD   U   U  M   M  BBBB     K   K  EEEEE  RRRR   N   N  EEEEE  L\n");
         console_write("D   D  U   U  MM MM  B   B    K  K   E      R   R  NN  N  E      L\n");
@@ -536,9 +545,37 @@ void console_write_ascii(const char* name) {
 }
 
 void console_draw_cursor(void) {
-    // Optional: Implement hardware cursor drawing if desired
     if (cursor_x >= VGA_WIDTH) return;
     if (cursor_y >= VGA_HEIGHT) return;
+
+    if (renderer_get_mode() == RENDER_FB) {
+        bool row_valid = false;
+        unsigned int hist_y = 0;
+        char ch = ' ';
+        unsigned char cell_color = current_color;
+        uint32_t fg_rgb;
+        uint32_t bg_rgb;
+
+        if (hist_line_count < HISTORY_LINES) {
+            unsigned int candidate = view_top_line + cursor_y;
+            if (candidate < hist_line_count) {
+                row_valid = true;
+                hist_y = candidate;
+            }
+        } else {
+            row_valid = true;
+            hist_y = (view_top_line + cursor_y) % HISTORY_LINES;
+        }
+
+        if (row_valid) {
+            ch = history[hist_y][cursor_x];
+            cell_color = history_color[hist_y][cursor_x];
+        }
+
+        decode_vga_cell_color(cell_color, &fg_rgb, &bg_rgb);
+        fb_draw_char(cursor_x * FB_CELL_WIDTH, cursor_y * FB_CELL_HEIGHT, ch, bg_rgb, fg_rgb);
+        return;
+    }
 
     unsigned int idx = cursor_y * VGA_WIDTH + cursor_x;
     unsigned short cell = VGA_MEMORY[idx];

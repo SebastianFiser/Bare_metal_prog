@@ -35,3 +35,4 @@ static const char scancode_map_shift[128] = {
 #define SCANCODE_RSHIFT  0x36
 #define SCANCODE_LSHIFT_RELEASE  0xAA
 #define SCANCODE_RSHIFT_RELEASE  0xB6
+
