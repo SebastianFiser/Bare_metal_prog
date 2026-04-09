@@ -208,8 +208,6 @@ void init_filesys(void)
 }
 
 static void VGA_INIT(uint32_t multiboot_info_ptr) {
-    unsigned long last_overlay_redraw_tick = 0;
-
     screen_init();
     console_write("VGA fallback initialized\n");
     gdt_install();
@@ -232,14 +230,6 @@ static void VGA_INIT(uint32_t multiboot_info_ptr) {
     console_save_state(&vga_boot_state);
 
     for (;;) {
-        unsigned long now = timer_get_ticks();
-
-        // Keep status overlays live, but do not overwrite fullscreen editor.
-        if (input_get_mode() == MODE_SHELL && now != last_overlay_redraw_tick) {
-            console_redraw_view();
-            last_overlay_redraw_tick = now;
-        }
-
         keyboard_poll();
         __asm__ volatile ("sti; hlt");
     }

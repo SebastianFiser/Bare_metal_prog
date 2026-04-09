@@ -27,6 +27,35 @@ static unsigned int fb_prev_cursor_x = VGA_WIDTH;
 static unsigned int fb_prev_cursor_y = VGA_HEIGHT;
 static render_mode_t last_render_mode = RENDER_VGA;
 
+static void resolve_row_source(unsigned int screen_y, bool *row_valid, unsigned int *hist_y) {
+    if (hist_line_count < HISTORY_LINES) {
+        unsigned int candidate = view_top_line + screen_y;
+        if (candidate < hist_line_count) {
+            *row_valid = true;
+            *hist_y = candidate;
+        } else {
+            *row_valid = false;
+            *hist_y = 0;
+        }
+    } else {
+        *row_valid = true;
+        *hist_y = (view_top_line + screen_y) % HISTORY_LINES;
+    }
+}
+
+static void fb_invalidate_row(unsigned int row) {
+    if (row >= VGA_HEIGHT) {
+        return;
+    }
+
+    for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+        fb_prev_valid[row][x] = false;
+    }
+}
+
+static void fb_shift_cache_down_one_row(void);
+static void fb_shift_cache_up_one_row(void);
+
 static uint32_t vga_index_to_rgb(unsigned char index) {
     static const uint32_t palette[16] = {
         0x00000000, 0x000000AA, 0x0000AA00, 0x0000AAAA,
@@ -250,17 +279,7 @@ void console_redraw_view(void) {
     for (unsigned int y = 0; y < VGA_HEIGHT; y++) {
         bool row_valid = false;
         unsigned int hist_y = 0;
-
-        if (hist_line_count < HISTORY_LINES) {
-            unsigned int candidate = view_top_line + y;
-            if (candidate < hist_line_count) {
-                row_valid = true;
-                hist_y = candidate;
-            }
-        } else {
-            row_valid = true;
-            hist_y = (view_top_line + y) % HISTORY_LINES;
-        }
+        resolve_row_source(y, &row_valid, &hist_y);
 
         for (unsigned int x = 0; x < VGA_WIDTH; x++) {
             char ch = row_valid ? history[hist_y][x] : ' ';
@@ -431,6 +450,8 @@ void console_write(const char* fmt, ...) {
 
 void console_scroll_up(void) {
     unsigned int max_scroll = (hist_line_count > VGA_HEIGHT) ? (hist_line_count - VGA_HEIGHT) : 0;
+    bool use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
+
     if (max_scroll == 0) {
         return;
     }
@@ -441,16 +462,36 @@ void console_scroll_up(void) {
 
     follow_bottom = (scroll_lines_from_bottom == 0);
     apply_scroll_position();
+
+    if (use_fb) {
+        fb_blit(0, 0, 0, FB_CELL_HEIGHT, VGA_WIDTH * FB_CELL_WIDTH, (VGA_HEIGHT - 1U) * FB_CELL_HEIGHT);
+        fb_shift_cache_up_one_row();
+        if (cursor_y > 0) {
+            fb_invalidate_row(cursor_y - 1U);
+        }
+    }
+
     console_redraw_view();
 }
 
 void console_scroll_down(void) {
+    bool use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
+
     if (scroll_lines_from_bottom > 0) {
         scroll_lines_from_bottom--;
     }
 
     follow_bottom = (scroll_lines_from_bottom == 0);
     apply_scroll_position();
+
+    if (use_fb) {
+        fb_blit(0, FB_CELL_HEIGHT, 0, 0, VGA_WIDTH * FB_CELL_WIDTH, (VGA_HEIGHT - 1U) * FB_CELL_HEIGHT);
+        fb_shift_cache_down_one_row();
+        if (cursor_y + 1U < VGA_HEIGHT) {
+            fb_invalidate_row(cursor_y + 1U);
+        }
+    }
+
     console_redraw_view();
 }
 
@@ -656,4 +697,32 @@ void console_restore_state(const console_state_t *state) {
     }
 
     console_redraw_view();
+}
+
+static void fb_shift_cache_down_one_row(void) {
+    for (int y = (int)VGA_HEIGHT - 1; y > 0; y--) {
+        for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+            fb_prev_chars[y][x] = fb_prev_chars[y - 1][x];
+            fb_prev_colors[y][x] = fb_prev_colors[y - 1][x];
+            fb_prev_valid[y][x] = fb_prev_valid[y - 1][x];
+        }
+    }
+
+    for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+        fb_prev_valid[0][x] = false;
+    }
+}
+
+static void fb_shift_cache_up_one_row(void) {
+    for (unsigned int y = 0; y < VGA_HEIGHT - 1; y++) {
+        for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+            fb_prev_chars[y][x] = fb_prev_chars[y + 1][x];
+            fb_prev_colors[y][x] = fb_prev_colors[y + 1][x];
+            fb_prev_valid[y][x] = fb_prev_valid[y + 1][x];
+        }
+    }
+
+    for (unsigned int x = 0; x < VGA_WIDTH; x++) {
+        fb_prev_valid[VGA_HEIGHT - 1][x] = false;
+    }
 }

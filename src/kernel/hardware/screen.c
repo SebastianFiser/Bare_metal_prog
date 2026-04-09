@@ -35,6 +35,14 @@ bool fb_is_available(void) {
     return (fb.address != NULL && fb.width > 0 && fb.height > 0 && fb.bpp == 32);
 }
 
+uint32_t fb_get_width(void) {
+    return fb.width;
+}
+
+uint32_t fb_get_height(void) {
+    return fb.height;
+}
+
 typedef struct {
     char ch;
     uint8_t rows[FB_FONT_HEIGHT];
@@ -194,6 +202,41 @@ void fb_init(uint32_t multiboot_info_ptr) {
     console_write("fb_init: framebuffer tag not found\n");
 }
 
+void fb_blit(uint32_t dst_x, uint32_t dst_y, uint32_t src_x, uint32_t src_y, uint32_t width, uint32_t height) {
+    if(!fb_is_available()) return;
+    if (width == 0 || height == 0) return;
+    if (dst_x + width > fb.width || src_x + width > fb.width) return;
+    if (dst_y + height > fb.height || src_y + height > fb.height) return;
+
+    int y_start = 0;
+    int y_end = (int)height;
+    int y_step = 1;
+
+    if (dst_y > src_y) {
+        y_start = (int)height - 1;
+        y_end = -1;
+        y_step = -1;
+    }
+
+    for (int yy = y_start; yy != y_end; yy += y_step) {
+        uint8_t* src_row = (uint8_t*)fb.address + ((src_y + (uint32_t)yy) * fb.pitch);
+        uint8_t* dst_row = (uint8_t*)fb.address + ((dst_y + (uint32_t)yy) * fb.pitch);
+        uint32_t* src = (uint32_t*)(src_row + (src_x * 4U));
+        uint32_t* dst = (uint32_t*)(dst_row + (dst_x * 4U));
+
+        if (dst < src) {
+            for (uint32_t xx = 0; xx < width; xx++) {
+                dst[xx] = src[xx];
+            }
+        } else if (dst > src) {
+            for (int xx = (int)width - 1; xx >= 0; xx--) {
+                dst[xx] = src[xx];
+            }
+        }
+    }
+
+}
+
 void fb_clear(uint32_t color) {
     for (uint32_t y = 0; y < fb.height; y++) {
         for (uint32_t x = 0; x < fb.width; x++) {
@@ -226,29 +269,58 @@ void fb_fill_rect(uint32_t x, uint32_t y, uint32_t width, uint32_t height, uint3
     }
 }
 
-void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t fg_color, uint32_t bg_color) {
+void fb_draw_char_cell(uint32_t x, uint32_t y, uint32_t cell_width, uint32_t cell_height, char c, uint32_t fg_color, uint32_t bg_color) {
     const uint8_t* glyph = fb_get_glyph(c);
+    uint32_t draw_w;
+    uint32_t draw_h;
+    uint32_t x_offset;
+    uint32_t y_offset;
+    uint32_t max_glyph_w = FB_FONT_WIDTH;
+    uint32_t max_glyph_h = FB_FONT_HEIGHT * 2U;
 
-    /* Clear full visual cell first to avoid ghost pixels between redraws. */
-    for (uint32_t row = 0; row < FB_CELL_HEIGHT; row++) {
-        for (uint32_t col = 0; col < FB_CELL_WIDTH; col++) {
+    if (cell_width == 0 || cell_height == 0) {
+        return;
+    }
+
+    for (uint32_t row = 0; row < cell_height; row++) {
+        for (uint32_t col = 0; col < cell_width; col++) {
             fb_putpixel(x + col, y + row, bg_color);
         }
     }
 
-    for (uint32_t row = 0; row < FB_FONT_HEIGHT; row++) {
-        uint8_t row_mask = glyph[row];
+    draw_w = (cell_width > 2U) ? (cell_width - 2U) : cell_width;
+    draw_h = (cell_height > 2U) ? (cell_height - 2U) : cell_height;
 
-        for (uint32_t col = 0; col < FB_FONT_WIDTH; col++) {
-            if (row_mask & (1U << (7U - col))) {
-                uint32_t px = x + 1U + col;
-                uint32_t py = y + 1U + (row * 2U);
+    /* Keep text readable at high resolutions: fit cells to screen, but do not upscale glyphs indefinitely. */
+    if (draw_w > max_glyph_w) {
+        draw_w = max_glyph_w;
+    }
+    if (draw_h > max_glyph_h) {
+        draw_h = max_glyph_h;
+    }
 
-                fb_putpixel(px, py, fg_color);
-                fb_putpixel(px, py + 1U, fg_color);
+    if (draw_w == 0 || draw_h == 0) {
+        return;
+    }
+
+    x_offset = (cell_width - draw_w) / 2U;
+    y_offset = (cell_height - draw_h) / 2U;
+
+    for (uint32_t py = 0; py < draw_h; py++) {
+        uint32_t src_row = (py * FB_FONT_HEIGHT) / draw_h;
+        uint8_t row_mask = glyph[src_row];
+
+        for (uint32_t px = 0; px < draw_w; px++) {
+            uint32_t src_col = (px * FB_FONT_WIDTH) / draw_w;
+            if (row_mask & (1U << (7U - src_col))) {
+                fb_putpixel(x + x_offset + px, y + y_offset + py, fg_color);
             }
         }
     }
+}
+
+void fb_draw_char(uint32_t x, uint32_t y, char c, uint32_t fg_color, uint32_t bg_color) {
+    fb_draw_char_cell(x, y, FB_CELL_WIDTH, FB_CELL_HEIGHT, c, fg_color, bg_color);
 }
 
 void fb_draw_text(uint32_t x, uint32_t y, const char* text, uint32_t fg_color, uint32_t bg_color) {
