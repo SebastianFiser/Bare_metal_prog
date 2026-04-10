@@ -6,8 +6,11 @@
 #define VGA_HEIGHT 25
 #define VGA_MEMORY ((volatile unsigned short*)0xB8000)
 
+#define CONSOLE_MAX_COLS 160
+#define CONSOLE_MAX_ROWS 64
+
 #define HISTORY_LINES 512
-#define HISTORY_COLS VGA_WIDTH
+#define HISTORY_COLS CONSOLE_MAX_COLS
 
 #define CONSOLE_COLOR_DEFAULT 0x0F
 #define CONSOLE_COLOR_ERROR   0x0C
