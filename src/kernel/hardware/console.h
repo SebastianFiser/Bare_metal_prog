@@ -46,9 +46,9 @@ typedef struct {
     unsigned int view_top_line;
     bool follow_bottom;
 
-    char history[HISTORY_LINES][HISTORY_COLS];
-    unsigned char history_color[HISTORY_LINES][HISTORY_COLS];
+    unsigned int history_cols;
+    unsigned int view_rows;
 } console_state_t;
 
-void console_save_state(console_state_t* state);
-void console_restore_state(const console_state_t* state);
+bool console_save_state(console_state_t* state);
+bool console_restore_state(const console_state_t* state);

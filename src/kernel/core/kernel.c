@@ -208,6 +208,10 @@ void init_filesys(void)
 }
 
 static void VGA_INIT(uint32_t multiboot_info_ptr) {
+    heap_init();
+    input_buffers_init();
+    editor_buffers_init();
+    console_write("heap initialized\n");
     screen_init();
     console_write("VGA fallback initialized\n");
     gdt_install();
@@ -218,8 +222,7 @@ static void VGA_INIT(uint32_t multiboot_info_ptr) {
     console_write("PIC remapped\n");
     timer_init();
     console_write("timer initialized\n");
-    heap_init();
-    console_write("heap initialized\n");
+   
     init_filesys();
     console_write("file system initialized\n");
     console_set_color(0x0E);

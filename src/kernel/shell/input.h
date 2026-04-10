@@ -25,3 +25,4 @@ typedef enum {
 void input_handle_event(const input_event_t *event);
 void input_set_mode(ui_mode_t mode);
 ui_mode_t input_get_mode(void);
+void input_buffers_init(void);

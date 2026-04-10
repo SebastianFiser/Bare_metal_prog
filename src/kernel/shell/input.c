@@ -2,13 +2,26 @@
 #include "shell.h"
 #include "input.h"
 #include "meowim.h"
+#include "heap.h"
 
 #define LINE_MAX 128
 
-static char line_buffer[LINE_MAX];
+static char *line_buffer = NULL;
 static unsigned int line_len = 0;
 static unsigned int line_cursor = 0;
 static ui_mode_t current_mode = MODE_SHELL;
+
+void input_buffers_init(void) {
+    if (line_buffer) {
+        kfree(line_buffer);
+    }
+    line_buffer = (char*)kcalloc(sizeof(char), LINE_MAX);
+    if (!line_buffer) {
+        PANIC("failed to allocate input line buffer");
+    }
+    line_len = 0;
+    line_cursor = 0;
+}
 
 void input_set_mode(ui_mode_t mode) {
     current_mode = mode;

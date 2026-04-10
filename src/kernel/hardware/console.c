@@ -1,5 +1,6 @@
 #include "common.h"
 #include "console.h"
+#include "heap.h"
 #include "kernel.h"
 #include "renderer.h"
 #include "screen.h"
@@ -8,8 +9,8 @@ static unsigned int cursor_x = 0;
 static unsigned int cursor_y = 0;
 static unsigned char current_color = 0x0F; 
 
-static char history[HISTORY_LINES][HISTORY_COLS];
-static unsigned char history_color[HISTORY_LINES][HISTORY_COLS];
+static char *history_chars = NULL;
+static unsigned char *history_colors = NULL;
 static unsigned int hist_write_line = 0;
 static unsigned int hist_write_col = 0;
 static unsigned int hist_line_count = 1;
@@ -17,12 +18,24 @@ static unsigned int scroll_lines_from_bottom = 0;
 static unsigned int view_top_line = 0;
 static bool follow_bottom = true;
 
-static char fb_prev_chars[CONSOLE_MAX_ROWS][CONSOLE_MAX_COLS];
-static unsigned char fb_prev_colors[CONSOLE_MAX_ROWS][CONSOLE_MAX_COLS];
-static bool fb_prev_valid[CONSOLE_MAX_ROWS][CONSOLE_MAX_COLS];
+static char *fb_prev_chars = NULL;
+static unsigned char *fb_prev_colors = NULL;
+static bool *fb_prev_valid = NULL;
 static unsigned int fb_prev_cursor_x = CONSOLE_MAX_COLS;
 static unsigned int fb_prev_cursor_y = CONSOLE_MAX_ROWS;
 static render_mode_t last_render_mode = RENDER_VGA;
+static unsigned int history_cols = VGA_WIDTH;
+static unsigned int view_rows = VGA_HEIGHT;
+
+static char *saved_history_chars = NULL;
+static unsigned char *saved_history_colors = NULL;
+static unsigned int saved_history_cols = 0;
+
+static void apply_scroll_position(void);
+static void console_free_saved_state(void);
+
+#define HIST_IDX(line, col) ((line) * history_cols + (col))
+#define FB_IDX(row, col) ((row) * history_cols + (col))
 
 static unsigned int console_cols(void) {
     if (renderer_get_mode() == RENDER_FB && fb_is_available()) {
@@ -54,6 +67,101 @@ static unsigned int console_rows(void) {
     return VGA_HEIGHT;
 }
 
+static bool console_alloc_buffers(unsigned int new_cols, unsigned int new_rows, bool preserve) {
+    char *new_history_chars;
+    unsigned char *new_history_colors;
+    char *new_fb_prev_chars;
+    unsigned char *new_fb_prev_colors;
+    bool *new_fb_prev_valid;
+    unsigned int old_cols = history_cols;
+
+    if (new_cols == 0 || new_rows == 0) {
+        return false;
+    }
+
+    new_history_chars = (char*)kcalloc(sizeof(char), HISTORY_LINES * new_cols);
+    new_history_colors = (unsigned char*)kcalloc(sizeof(unsigned char), HISTORY_LINES * new_cols);
+    new_fb_prev_chars = (char*)kcalloc(sizeof(char), new_rows * new_cols);
+    new_fb_prev_colors = (unsigned char*)kcalloc(sizeof(unsigned char), new_rows * new_cols);
+    new_fb_prev_valid = (bool*)kcalloc(sizeof(bool), new_rows * new_cols);
+
+    if (!new_history_chars || !new_history_colors || !new_fb_prev_chars || !new_fb_prev_colors || !new_fb_prev_valid) {
+        if (new_history_chars) kfree(new_history_chars);
+        if (new_history_colors) kfree(new_history_colors);
+        if (new_fb_prev_chars) kfree(new_fb_prev_chars);
+        if (new_fb_prev_colors) kfree(new_fb_prev_colors);
+        if (new_fb_prev_valid) kfree(new_fb_prev_valid);
+        return false;
+    }
+
+    for (unsigned int y = 0; y < HISTORY_LINES; y++) {
+        for (unsigned int x = 0; x < new_cols; x++) {
+            new_history_chars[y * new_cols + x] = ' ';
+            new_history_colors[y * new_cols + x] = current_color;
+        }
+    }
+
+    if (preserve && history_chars && history_colors) {
+        unsigned int copy_cols = (old_cols < new_cols) ? old_cols : new_cols;
+        for (unsigned int y = 0; y < HISTORY_LINES; y++) {
+            for (unsigned int x = 0; x < copy_cols; x++) {
+                new_history_chars[y * new_cols + x] = history_chars[y * old_cols + x];
+                new_history_colors[y * new_cols + x] = history_colors[y * old_cols + x];
+            }
+        }
+    }
+
+    if (history_chars) kfree(history_chars);
+    if (history_colors) kfree(history_colors);
+    if (fb_prev_chars) kfree(fb_prev_chars);
+    if (fb_prev_colors) kfree(fb_prev_colors);
+    if (fb_prev_valid) kfree(fb_prev_valid);
+
+    history_chars = new_history_chars;
+    history_colors = new_history_colors;
+    fb_prev_chars = new_fb_prev_chars;
+    fb_prev_colors = new_fb_prev_colors;
+    fb_prev_valid = new_fb_prev_valid;
+
+    history_cols = new_cols;
+    view_rows = new_rows;
+
+    if (hist_write_col >= history_cols) {
+        hist_write_col = history_cols ? (history_cols - 1) : 0;
+    }
+    if (cursor_x >= history_cols) {
+        cursor_x = history_cols ? (history_cols - 1) : 0;
+    }
+    if (cursor_y >= view_rows) {
+        cursor_y = view_rows ? (view_rows - 1) : 0;
+    }
+
+    fb_prev_cursor_x = CONSOLE_MAX_COLS;
+    fb_prev_cursor_y = CONSOLE_MAX_ROWS;
+    return true;
+}
+
+static bool console_ensure_layout(void) {
+    unsigned int target_cols = console_cols();
+    unsigned int target_rows = console_rows();
+
+    if (!history_chars || !history_colors || !fb_prev_chars || !fb_prev_colors || !fb_prev_valid) {
+        return console_alloc_buffers(target_cols, target_rows, false);
+    }
+
+    if (history_cols != target_cols || view_rows != target_rows) {
+        if (!console_alloc_buffers(target_cols, target_rows, true)) {
+            return false;
+        }
+        if (hist_write_col >= history_cols) {
+            hist_write_col = history_cols ? (history_cols - 1) : 0;
+        }
+        apply_scroll_position();
+    }
+
+    return true;
+}
+
 static void resolve_row_source(unsigned int screen_y, bool *row_valid, unsigned int *hist_y) {
     if (hist_line_count < HISTORY_LINES) {
         unsigned int candidate = view_top_line + screen_y;
@@ -72,14 +180,14 @@ static void resolve_row_source(unsigned int screen_y, bool *row_valid, unsigned 
 
 static void fb_invalidate_row(unsigned int row) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     if (row >= rows) {
         return;
     }
 
     for (unsigned int x = 0; x < cols; x++) {
-        fb_prev_valid[row][x] = false;
+        fb_prev_valid[FB_IDX(row, x)] = false;
     }
 }
 
@@ -107,11 +215,11 @@ static void decode_vga_cell_color(unsigned char cell_color, uint32_t *fg, uint32
 
 static void fb_invalidate_cache(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     for (unsigned int y = 0; y < rows; y++) {
         for (unsigned int x = 0; x < cols; x++) {
-            fb_prev_valid[y][x] = false;
+            fb_prev_valid[FB_IDX(y, x)] = false;
         }
     }
     fb_prev_cursor_x = CONSOLE_MAX_COLS;
@@ -119,7 +227,7 @@ static void fb_invalidate_cache(void) {
 }
 
 static unsigned int get_bottom_top_line(void) {
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     if (hist_line_count <= rows) {
         return 0;
@@ -131,7 +239,7 @@ static unsigned int get_bottom_top_line(void) {
 }
 
 static void apply_scroll_position(void) {
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
     unsigned int bottom_top = get_bottom_top_line();
 
     if (hist_line_count < HISTORY_LINES) {
@@ -146,9 +254,9 @@ static void apply_scroll_position(void) {
 }
 
 static void clear_history_line(unsigned int line) {
-    for (unsigned int x = 0; x < HISTORY_COLS; x++) {
-        history[line][x] = ' ';
-        history_color[line][x] = current_color;
+    for (unsigned int x = 0; x < history_cols; x++) {
+        history_chars[HIST_IDX(line, x)] = ' ';
+        history_colors[HIST_IDX(line, x)] = current_color;
     }
 }
 
@@ -163,7 +271,7 @@ static void history_new_line(void) {
 }
 
 static void update_view_to_bottom(void) {
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     if (!follow_bottom) {
         return;
@@ -286,6 +394,10 @@ void write_text(unsigned int x, unsigned int y, unsigned char color, const char*
 }
 
 void screen_init(void) {
+    if (!console_ensure_layout()) {
+        return;
+    }
+    
     for (unsigned int y = 0; y < HISTORY_LINES; y++) {
         clear_history_line(y);
     }
@@ -304,16 +416,23 @@ void screen_init(void) {
 
 void console_redraw_view(void) {
     bool use_fb = (renderer_get_mode() == RENDER_FB);
-    unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int cols;
+    unsigned int rows;
     unsigned char color = current_color;
+
+    if (!console_ensure_layout()) {
+        return;
+    }
+
+    cols = console_cols();
+    rows = view_rows;
 
     if (use_fb && last_render_mode != RENDER_FB) {
         fb_invalidate_cache();
     }
 
     if (use_fb && fb_prev_cursor_x < cols && fb_prev_cursor_y < rows) {
-        fb_prev_valid[fb_prev_cursor_y][fb_prev_cursor_x] = false;
+        fb_prev_valid[FB_IDX(fb_prev_cursor_y, fb_prev_cursor_x)] = false;
     }
 
     for (unsigned int y = 0; y < rows; y++) {
@@ -322,8 +441,8 @@ void console_redraw_view(void) {
         resolve_row_source(y, &row_valid, &hist_y);
 
         for (unsigned int x = 0; x < cols; x++) {
-            char ch = row_valid ? history[hist_y][x] : ' ';
-            unsigned char cell_color = row_valid ? history_color[hist_y][x] : color;
+            char ch = row_valid ? history_chars[HIST_IDX(hist_y, x)] : ' ';
+            unsigned char cell_color = row_valid ? history_colors[HIST_IDX(hist_y, x)] : color;
 
             if (use_fb) {
                 if (x == cursor_x && y == cursor_y) {
@@ -332,7 +451,7 @@ void console_redraw_view(void) {
                     cell_color = (unsigned char)((fg << 4) | bg);
                 }
 
-                if (fb_prev_valid[y][x] && fb_prev_chars[y][x] == ch && fb_prev_colors[y][x] == cell_color) {
+                if (fb_prev_valid[FB_IDX(y, x)] && fb_prev_chars[FB_IDX(y, x)] == ch && fb_prev_colors[FB_IDX(y, x)] == cell_color) {
                     continue;
                 }
 
@@ -340,9 +459,9 @@ void console_redraw_view(void) {
                 uint32_t bg_rgb;
                 decode_vga_cell_color(cell_color, &fg_rgb, &bg_rgb);
                 fb_draw_char(x * FB_CELL_WIDTH, y * FB_CELL_HEIGHT, ch, fg_rgb, bg_rgb);
-                fb_prev_chars[y][x] = ch;
-                fb_prev_colors[y][x] = cell_color;
-                fb_prev_valid[y][x] = true;
+                fb_prev_chars[FB_IDX(y, x)] = ch;
+                fb_prev_colors[FB_IDX(y, x)] = cell_color;
+                fb_prev_valid[FB_IDX(y, x)] = true;
                 continue;
             } else {
                 unsigned int vga_index = y * VGA_WIDTH + x;
@@ -363,23 +482,27 @@ void console_redraw_view(void) {
 
 void console_putchar(char c) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
+
+    if (!console_ensure_layout()) {
+        return;
+    }
 
     if (c == '\b') {
         if (hist_write_col > 0) {
             hist_write_col--;
-            history[hist_write_line][hist_write_col] = ' ';
-            history_color[hist_write_line][hist_write_col] = current_color;
+            history_chars[HIST_IDX(hist_write_line, hist_write_col)] = ' ';
+            history_colors[HIST_IDX(hist_write_line, hist_write_col)] = current_color;
         } else if (hist_line_count > 1) {
             hist_write_line = (hist_write_line + HISTORY_LINES - 1) % HISTORY_LINES;
             hist_write_col = cols;
-            while (hist_write_col > 0 && history[hist_write_line][hist_write_col - 1] == ' ') {
+            while (hist_write_col > 0 && history_chars[HIST_IDX(hist_write_line, hist_write_col - 1)] == ' ') {
                 hist_write_col--;
             }
             if (hist_write_col > 0) {
                 hist_write_col--;
-                history[hist_write_line][hist_write_col] = ' ';
-                history_color[hist_write_line][hist_write_col] = current_color;
+                history_chars[HIST_IDX(hist_write_line, hist_write_col)] = ' ';
+                history_colors[HIST_IDX(hist_write_line, hist_write_col)] = current_color;
             }
         }
         goto redraw;
@@ -394,8 +517,8 @@ void console_putchar(char c) {
         history_new_line();
     }
 
-    history[hist_write_line][hist_write_col] = c;
-    history_color[hist_write_line][hist_write_col] = current_color;
+    history_chars[HIST_IDX(hist_write_line, hist_write_col)] = c;
+    history_colors[HIST_IDX(hist_write_line, hist_write_col)] = current_color;
     hist_write_col++;
 
 redraw:
@@ -495,9 +618,13 @@ void console_write(const char* fmt, ...) {
 
 void console_scroll_up(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
     unsigned int max_scroll = (hist_line_count > rows) ? (hist_line_count - rows) : 0;
     bool use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
+
+    if (!console_ensure_layout()) {
+        return;
+    }
 
     if (max_scroll == 0) {
         return;
@@ -523,8 +650,12 @@ void console_scroll_up(void) {
 
 void console_scroll_down(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
     bool use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
+
+    if (!console_ensure_layout()) {
+        return;
+    }
 
     if (scroll_lines_from_bottom > 0) {
         scroll_lines_from_bottom--;
@@ -636,7 +767,7 @@ void console_write_ascii(const char* name) {
 
 void console_draw_cursor(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     if (cursor_x >= cols) return;
     if (cursor_y >= rows) return;
@@ -661,8 +792,8 @@ void console_draw_cursor(void) {
         }
 
         if (row_valid) {
-            ch = history[hist_y][cursor_x];
-            cell_color = history_color[hist_y][cursor_x];
+            ch = history_chars[HIST_IDX(hist_y, cursor_x)];
+            cell_color = history_colors[HIST_IDX(hist_y, cursor_x)];
         }
 
         decode_vga_cell_color(cell_color, &fg_rgb, &bg_rgb);
@@ -682,7 +813,7 @@ void console_cursor_left(void) {
         return;
     }
 
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
     hist_write_col--;
     cursor_x = hist_write_col;
     cursor_y = (hist_line_count < rows) ? (hist_line_count - 1) : (rows - 1);
@@ -692,7 +823,7 @@ void console_cursor_left(void) {
 
 void console_cursor_right(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     if (hist_write_col >= cols) {
         return;
@@ -705,39 +836,61 @@ void console_cursor_right(void) {
     console_redraw_view();
 }
 
-void console_save_state(console_state_t *state) {
+bool console_save_state(console_state_t *state) {
     if (!state) {
-        return;
+        return false;
     }
+    if (!history_chars || !history_colors) {
+        return false;
+    }
+
+    console_free_saved_state();
+
+    saved_history_chars = (char*)kcalloc(sizeof(char), HISTORY_LINES * history_cols);
+    saved_history_colors = (unsigned char*)kcalloc(sizeof(unsigned char), HISTORY_LINES * history_cols);
+    if (!saved_history_chars || !saved_history_colors) {
+        console_free_saved_state();
+        return false;
+    }
+
+    for (unsigned int y = 0; y < HISTORY_LINES; y++) {
+        for (unsigned int x = 0; x < history_cols; x++) {
+            saved_history_chars[y * history_cols + x] = history_chars[HIST_IDX(y, x)];
+            saved_history_colors[y * history_cols + x] = history_colors[HIST_IDX(y, x)];
+        }
+    }
+
+    saved_history_cols = history_cols;
 
     state->cursor_x = cursor_x;
     state->cursor_y = cursor_y;
     state->current_color = current_color;
-
     state->hist_write_line = hist_write_line;
     state->hist_write_col = hist_write_col;
     state->hist_line_count = hist_line_count;
     state->scroll_lines_from_bottom = scroll_lines_from_bottom;
     state->view_top_line = view_top_line;
     state->follow_bottom = follow_bottom;
+    state->history_cols = history_cols;
+    state->view_rows = view_rows;
 
-    for (unsigned int y = 0; y < HISTORY_LINES; y++) {
-        for (unsigned int x = 0; x < HISTORY_COLS; x++) {
-            state->history[y][x] = history[y][x];
-            state->history_color[y][x] = history_color[y][x];
-        }
-    }
+    return true;
 }
 
-void console_restore_state(const console_state_t *state) {
+bool console_restore_state(const console_state_t *state) {
     if (!state) {
-        return;
+        return false;
+    }
+    if (!saved_history_chars || !saved_history_colors || saved_history_cols == 0) {
+        return false;
+    }
+    if (!console_ensure_layout()) {
+        return false;
     }
 
     cursor_x = state->cursor_x;
     cursor_y = state->cursor_y;
     current_color = state->current_color;
-
     hist_write_line = state->hist_write_line;
     hist_write_col = state->hist_write_col;
     hist_line_count = state->hist_line_count;
@@ -745,46 +898,77 @@ void console_restore_state(const console_state_t *state) {
     view_top_line = state->view_top_line;
     follow_bottom = state->follow_bottom;
 
+    unsigned int copy_cols = (saved_history_cols < history_cols) ? saved_history_cols : history_cols;
+
     for (unsigned int y = 0; y < HISTORY_LINES; y++) {
-        for (unsigned int x = 0; x < HISTORY_COLS; x++) {
-            history[y][x] = state->history[y][x];
-            history_color[y][x] = state->history_color[y][x];
+        for (unsigned int x = 0; x < history_cols; x++) {
+            if (x < copy_cols) {
+                history_chars[HIST_IDX(y, x)] = saved_history_chars[y * saved_history_cols + x];
+                history_colors[HIST_IDX(y, x)] = saved_history_colors[y * saved_history_cols + x];
+            } else {
+                history_chars[HIST_IDX(y, x)] = ' ';
+                history_colors[HIST_IDX(y, x)] = current_color;
+            }
         }
     }
 
+    if (hist_write_col >= history_cols) {
+        hist_write_col = history_cols ? (history_cols - 1) : 0;
+    }
+    if (cursor_x >= history_cols) {
+        cursor_x = history_cols ? (history_cols - 1) : 0;
+    }
+    if (cursor_y >= view_rows) {
+        cursor_y = view_rows ? (view_rows - 1) : 0;
+    }
+
+    fb_invalidate_cache();
     console_redraw_view();
+    return true;
 }
 
 static void fb_shift_cache_down_one_row(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     for (int y = (int)rows - 1; y > 0; y--) {
         for (unsigned int x = 0; x < cols; x++) {
-            fb_prev_chars[y][x] = fb_prev_chars[y - 1][x];
-            fb_prev_colors[y][x] = fb_prev_colors[y - 1][x];
-            fb_prev_valid[y][x] = fb_prev_valid[y - 1][x];
+            fb_prev_chars[FB_IDX(y, x)] = fb_prev_chars[FB_IDX(y - 1, x)];
+            fb_prev_colors[FB_IDX(y, x)] = fb_prev_colors[FB_IDX(y - 1, x)];
+            fb_prev_valid[FB_IDX(y, x)] = fb_prev_valid[FB_IDX(y - 1, x)];
         }
     }
 
     for (unsigned int x = 0; x < cols; x++) {
-        fb_prev_valid[0][x] = false;
+        fb_prev_valid[FB_IDX(0, x)] = false;
     }
 }
 
 static void fb_shift_cache_up_one_row(void) {
     unsigned int cols = console_cols();
-    unsigned int rows = console_rows();
+    unsigned int rows = view_rows;
 
     for (unsigned int y = 0; y < rows - 1; y++) {
         for (unsigned int x = 0; x < cols; x++) {
-            fb_prev_chars[y][x] = fb_prev_chars[y + 1][x];
-            fb_prev_colors[y][x] = fb_prev_colors[y + 1][x];
-            fb_prev_valid[y][x] = fb_prev_valid[y + 1][x];
+            fb_prev_chars[FB_IDX(y, x)] = fb_prev_chars[FB_IDX(y + 1, x)];
+            fb_prev_colors[FB_IDX(y, x)] = fb_prev_colors[FB_IDX(y + 1, x)];
+            fb_prev_valid[FB_IDX(y, x)] = fb_prev_valid[FB_IDX(y + 1, x)];
         }
     }
 
     for (unsigned int x = 0; x < cols; x++) {
-        fb_prev_valid[rows - 1][x] = false;
+        fb_prev_valid[FB_IDX(rows - 1, x)] = false;
     }
+}
+
+static void console_free_saved_state(void) {
+    if (saved_history_chars) {
+        kfree(saved_history_chars);
+        saved_history_chars = NULL;
+    }
+    if (saved_history_colors) {
+        kfree(saved_history_colors);
+        saved_history_colors = NULL;
+    }
+    saved_history_cols = 0;
 }

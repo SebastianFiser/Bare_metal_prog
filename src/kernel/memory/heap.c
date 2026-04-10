@@ -45,7 +45,6 @@ void* kmalloc(size_t size) {
         }
         curr = curr->next; 
     }
-    console_write("alloc failed for %d bytes\n", size);
     return NULL;
 }
 
@@ -57,8 +56,6 @@ void kfree(void* ptr) {
     }
 
     curr = ((block_t*)ptr) - 1;
-    console_write("block free=%d size=%d\n", curr->free, curr->size);
-    heap_dump();
     ASSERT(curr->free == 0);
     ASSERT(curr->magic == HEAP_MAGIC);
     if (!ptr_in_heap(curr)) {
@@ -125,4 +122,17 @@ void heap_validate(void) {
         ASSERT(guard <= 1024);
         (void)block_start;
     }
+}
+
+void* kzalloc(size_t size) {
+    void* p = kmalloc(size);
+    if (!p) return NULL;
+    memset(p, 0, size);
+    return p;
+}
+
+void* kcalloc(size_t size, size_t count) {
+    if(count == 0 || size == 0) return NULL;
+    if (count > ((size_t)-1) / size) return NULL;
+    return kzalloc(count * size);
 }

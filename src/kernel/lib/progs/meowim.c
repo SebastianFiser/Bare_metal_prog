@@ -3,6 +3,7 @@
 #include "filesys.h"
 #include "input.h"
 #include "shell.h"
+#include "heap.h"
 
 static console_state_t saved_state;
 static int active = 0;
@@ -13,13 +14,35 @@ static fs_node_t *editor_dir = 0;
 #define BODY_TOP 1
 #define BODY_ROWS (VGA_HEIGHT - 2)
 
-static char text_buf[MEOWIM_BUF_MAX];
+static char *text_buf = NULL;
 static unsigned int text_len = 0;
 static unsigned int cursor = 0;
 static unsigned int view_first_line = 0;
 static int dirty = 0;
-static char current_file[MEOWIM_NAME_MAX];
+static char *current_file = NULL;
 static unsigned int desired_col = 0;
+
+void editor_buffers_init(void) {
+	if(text_buf) {
+		kfree(text_buf);
+	}
+	if (current_file) {
+		kfree(current_file);
+	}
+
+	text_buf = (char*)kcalloc(sizeof(char), MEOWIM_BUF_MAX);
+	current_file = (char*)kcalloc(sizeof(char), MEOWIM_NAME_MAX);
+
+	if (!text_buf || !current_file) {
+		PANIC("Failed to allocate editor buffers");
+	}
+
+	text_len = 0;
+	cursor = 0;
+	view_first_line = 0;
+	dirty = 0;
+	current_file[0] = '\0';
+ }
 
 static void put_cell(unsigned int x, unsigned int y, unsigned char color, char ch) {
 	if (x >= VGA_WIDTH || y >= VGA_HEIGHT) {
