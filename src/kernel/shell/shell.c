@@ -111,7 +111,8 @@ static void cmd_heap_validate(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]);
 static int parse_uint_arg(const char *s, unsigned int *out);
 static void build_test_name(const char *prefix, unsigned int idx, char *out, unsigned int out_size);
-
+static void mem_block_dump(int argc, char argv[][SHELL_MAX_TOKEN]);
+    
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
     {"whoami", "display current user", whoami},
@@ -127,9 +128,59 @@ static const shell_command_t commands[] = {
     {"fstress", "run RAM FS stress test, usage: fstress <iterations>", cmd_fs_stress},
     {"memdump", "dump heap metadata for debugging", cmd_heap_dump},
     {"memvalidate", "validate heap integrity for debugging", cmd_heap_validate},
+    {"mblckdump", "dump one heap block: mblckdump <block> [bytes] [h|t|a] [p]", mem_block_dump},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void mem_block_dump(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    unsigned int block_num = 0;
+    unsigned int size = 64;
+    unsigned int count = 0;
+    char format = 'h';
+    int show_stats = 0;
+
+    if (argc < 2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: mblckdump <block> [bytes] [h|t|a] [p]\n");
+        return;
+    }
+
+    if (!parse_uint_arg(argv[1], &block_num)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid block index\n");
+        return;
+    }
+
+    count = (unsigned int)memblock_range();
+    if (count == 0 || block_num >= count) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid block number. Valid range: 0 - %d\n", count ? (count - 1) : 0);
+        return;
+    }
+
+    if (argc >= 3) {
+        if (!parse_uint_arg(argv[2], &size) || size == 0 || size > 256) {
+            console_write_colored(CONSOLE_COLOR_ERROR, "Invalid size value, use 1..256\n");
+            return;
+        }
+    }
+
+    if (argc >= 4) {
+        format = argv[3][0];
+        if ((format != 'h' && format != 't' && format != 'a') || argv[3][1] != '\0') {
+            console_write_colored(CONSOLE_COLOR_ERROR, "Invalid format, use h, t or a\n");
+            return;
+        }
+    }
+
+    if (argc >= 5) {
+        if (argv[4][0] != 'p' || argv[4][1] != '\0') {
+            console_write_colored(CONSOLE_COLOR_ERROR, "Invalid flag, use p\n");
+            return;
+        }
+        show_stats = 1;
+    }
+
+    dump_memblock((int)block_num, (int)size, format, show_stats);
+}
 
 static void cmd_heap_dump(int argc, char argv[][SHELL_MAX_TOKEN]) {
     heap_dump();

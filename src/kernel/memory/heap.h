@@ -34,3 +34,5 @@ void heap_validate(void);
 void input_buffers_init(void);
 void editor_buffers_init(void);
 void editor_buffers_init(void);
+void dump_memblock(int block_num, int size, const char format, int show_stats);
+int memblock_range(void);
