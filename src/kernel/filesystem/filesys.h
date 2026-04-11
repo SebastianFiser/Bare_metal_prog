@@ -8,11 +8,12 @@ typedef enum {
 } fs_node_type_t;
 
 typedef struct fs_node {
-    char name[32];
+    char *name;
     fs_node_type_t type;
     struct fs_node *parent;
-    struct fs_node *children[16];
+    struct fs_node **children;
     unsigned int child_count;
+    unsigned int child_capacity;
 
     char *data;
     unsigned int size;
@@ -31,3 +32,4 @@ int fs_read(fs_node_t *cwd, const char* name, char* out, int out_size);
 int fs_list_dir(fs_node_t *dir);
 
 int fs_delete(fs_node_t *cwd, const char *path);
+void fs_shutdown(void);

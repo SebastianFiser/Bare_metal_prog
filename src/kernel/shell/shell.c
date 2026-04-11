@@ -11,13 +11,39 @@
 #define SHELL_MAX_ARGS 8
 #define SHELL_MAX_TOKEN 32
 
+#define SHELL_READ_BUF_SIZE 256
+#define SHELL_PATH_BUF_SIZE 128
+
+static char *shell_read_buf;
+static char *shell_path_buf;
+
 typedef void (*shell_cmd_handler_t)(int argc, char argv[][SHELL_MAX_TOKEN]);
 static fs_node_t *current_dir = 0;
 
-static void shell_ensure_current_dir(void) {
+static int shell_ensure_buffers(void) {
+    if (!shell_read_buf) {
+        shell_read_buf = (char*)kcalloc(sizeof(char), SHELL_READ_BUF_SIZE);
+        if (!shell_read_buf) {
+            return 0;
+        }
+    }
+
+    if (!shell_path_buf) {
+        shell_path_buf = (char*)kcalloc(sizeof(char), SHELL_PATH_BUF_SIZE);
+        if (!shell_path_buf) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int shell_ensure_current_dir(void) {
     if (!current_dir) {
         current_dir = fs_root();
+        if (!current_dir) return 0;
     }
+    return 1;
 }
 
 fs_node_t *shell_get_cwd(void) {
@@ -82,6 +108,9 @@ static void cmd_cd(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_mkdir(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_heap_dump(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_heap_validate(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]);
+static int parse_uint_arg(const char *s, unsigned int *out);
+static void build_test_name(const char *prefix, unsigned int idx, char *out, unsigned int out_size);
 
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
@@ -95,6 +124,7 @@ static const shell_command_t commands[] = {
     {"edit", "open meowim editor, usage: edit <filename>", edit_file},
     {"cd", "change the current directory", cmd_cd},
     {"mkdir", "create a new directory", cmd_mkdir},
+    {"fstress", "run RAM FS stress test, usage: fstress <iterations>", cmd_fs_stress},
     {"memdump", "dump heap metadata for debugging", cmd_heap_dump},
     {"memvalidate", "validate heap integrity for debugging", cmd_heap_validate},
 };
@@ -106,6 +136,125 @@ static void cmd_heap_dump(int argc, char argv[][SHELL_MAX_TOKEN]) {
 }
 
 static void cmd_heap_validate(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    heap_validate();
+}
+
+static int parse_uint_arg(const char *s, unsigned int *out) {
+    unsigned int value = 0;
+
+    if (!s || !s[0] || !out) {
+        return 0;
+    }
+
+    for (unsigned int i = 0; s[i] != '\0'; i++) {
+        if (s[i] < '0' || s[i] > '9') {
+            return 0;
+        }
+        value = value * 10 + (unsigned int)(s[i] - '0');
+    }
+
+    *out = value;
+    return 1;
+}
+
+static void build_test_name(const char *prefix, unsigned int idx, char *out, unsigned int out_size) {
+    char digits[10];
+    unsigned int dcount = 0;
+    unsigned int pos = 0;
+
+    if (!out || out_size == 0) {
+        return;
+    }
+
+    while (*prefix && pos < (out_size - 1)) {
+        out[pos++] = *prefix++;
+    }
+
+    if (idx == 0) {
+        if (pos < (out_size - 1)) {
+            out[pos++] = '0';
+        }
+    } else {
+        while (idx > 0 && dcount < sizeof(digits)) {
+            digits[dcount++] = (char)('0' + (idx % 10));
+            idx /= 10;
+        }
+        while (dcount > 0 && pos < (out_size - 1)) {
+            out[pos++] = digits[--dcount];
+        }
+    }
+
+    out[pos] = '\0';
+}
+
+static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    unsigned int iterations = 100;
+    unsigned int ok = 0;
+    unsigned int fail = 0;
+    char dname[24];
+    char fname[24];
+    char read_back[32];
+    const char *payload = "ramfs_stress_payload";
+
+    shell_ensure_current_dir();
+
+    if (argc >= 2) {
+        if (!parse_uint_arg(argv[1], &iterations) || iterations == 0) {
+            console_write_colored(CONSOLE_COLOR_ERROR, "Usage: fstress <positive_number>\n");
+            return;
+        }
+    }
+
+    if (iterations > 1000) {
+        iterations = 1000;
+    }
+
+    console_write("fstress: starting %d iterations\n", iterations);
+
+    for (unsigned int i = 0; i < iterations; i++) {
+        build_test_name("d", i, dname, sizeof(dname));
+        build_test_name("f", i, fname, sizeof(fname));
+
+        if (fs_create(current_dir, dname, FS_NODE_DIR) < 0) {
+            fail++;
+            continue;
+        }
+
+        if (fs_create(current_dir, fname, FS_NODE_FILE) < 0) {
+            fs_delete(current_dir, dname);
+            fail++;
+            continue;
+        }
+
+        if (fs_write(current_dir, fname, payload) < 0) {
+            fs_delete(current_dir, fname);
+            fs_delete(current_dir, dname);
+            fail++;
+            continue;
+        }
+
+        if (fs_read(current_dir, fname, read_back, sizeof(read_back)) < 0) {
+            fs_delete(current_dir, fname);
+            fs_delete(current_dir, dname);
+            fail++;
+            continue;
+        }
+
+        if (fs_delete(current_dir, fname) < 0) {
+            fs_delete(current_dir, dname);
+            fail++;
+            continue;
+        }
+
+        if (fs_delete(current_dir, dname) < 0) {
+            fail++;
+            continue;
+        }
+
+        ok++;
+    }
+
+    console_write("fstress: ok=%d fail=%d\n", ok, fail);
     heap_validate();
 }
 
@@ -176,14 +325,18 @@ static void read_file(int argc, char argv[][SHELL_MAX_TOKEN]) {
         return;
     }
 
-    char buffer[256];
-    int result = fs_read(current_dir, argv[1], buffer, sizeof(buffer));
-    if (result < 0) {
-        console_write_colored(CONSOLE_COLOR_ERROR, "Error reading file: %d\n", result);
+    if (!shell_ensure_buffers()) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "cat: out of memmory\n");
         return;
     }
 
-    console_write("%s\n", buffer);
+    int result = fs_read(current_dir, argv[1], shell_read_buf, SHELL_READ_BUF_SIZE);
+    if (result < 0) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "cat: cannot read file: %d\n", result);
+        return;
+    }
+
+    console_write("%s\n", shell_read_buf);
 }
 
 static void make_file(int argc, char argv[][SHELL_MAX_TOKEN]) {
@@ -260,10 +413,15 @@ static void cmd_help(int argc, char argv[][SHELL_MAX_TOKEN]) {
 }
 
 void shell_prompt(void) {
-    char path[64];
     shell_ensure_current_dir();
-    fs_get_path(current_dir, path, sizeof(path));
-    console_write("%s>> ", path);
+
+    if (!shell_ensure_buffers()) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "shell: out of memmory\n");
+        return;
+    }
+
+    fs_get_path(current_dir, shell_path_buf, SHELL_PATH_BUF_SIZE);
+    console_write_colored(CONSOLE_COLOR_INFO, "%s> ", shell_path_buf);
 }
 
 void shell_execute_command(const char *cmdline) {

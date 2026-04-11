@@ -34,6 +34,38 @@ static unsigned int saved_history_cols = 0;
 static void apply_scroll_position(void);
 static void console_free_saved_state(void);
 
+static void console_sanitize_state(void) {
+    unsigned int max_scroll;
+
+    if (history_cols == 0 || view_rows == 0) {
+        return;
+    }
+
+    if (hist_line_count == 0) {
+        hist_line_count = 1;
+    } else if (hist_line_count > HISTORY_LINES) {
+        hist_line_count = HISTORY_LINES;
+    }
+
+    hist_write_line %= HISTORY_LINES;
+
+    if (hist_write_col > history_cols) {
+        hist_write_col = history_cols;
+    }
+
+    if (cursor_x >= history_cols) {
+        cursor_x = history_cols - 1;
+    }
+    if (cursor_y >= view_rows) {
+        cursor_y = view_rows - 1;
+    }
+
+    max_scroll = (hist_line_count > view_rows) ? (hist_line_count - view_rows) : 0;
+    if (scroll_lines_from_bottom > max_scroll) {
+        scroll_lines_from_bottom = max_scroll;
+    }
+}
+
 #define HIST_IDX(line, col) ((line) * history_cols + (col))
 #define FB_IDX(row, col) ((row) * history_cols + (col))
 
@@ -424,6 +456,8 @@ void console_redraw_view(void) {
         return;
     }
 
+    console_sanitize_state();
+
     cols = console_cols();
     rows = view_rows;
 
@@ -481,12 +515,16 @@ void console_redraw_view(void) {
 }
 
 void console_putchar(char c) {
-    unsigned int cols = console_cols();
-    unsigned int rows = view_rows;
+    unsigned int cols;
+    unsigned int rows;
 
     if (!console_ensure_layout()) {
         return;
     }
+
+    console_sanitize_state();
+    cols = console_cols();
+    rows = view_rows;
 
     if (c == '\b') {
         if (hist_write_col > 0) {
@@ -617,14 +655,20 @@ void console_write(const char* fmt, ...) {
 }
 
 void console_scroll_up(void) {
-    unsigned int cols = console_cols();
-    unsigned int rows = view_rows;
-    unsigned int max_scroll = (hist_line_count > rows) ? (hist_line_count - rows) : 0;
-    bool use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
+    unsigned int cols;
+    unsigned int rows;
+    unsigned int max_scroll;
+    bool use_fb;
 
     if (!console_ensure_layout()) {
         return;
     }
+
+    console_sanitize_state();
+    cols = console_cols();
+    rows = view_rows;
+    max_scroll = (hist_line_count > rows) ? (hist_line_count - rows) : 0;
+    use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
 
     if (max_scroll == 0) {
         return;
@@ -649,13 +693,18 @@ void console_scroll_up(void) {
 }
 
 void console_scroll_down(void) {
-    unsigned int cols = console_cols();
-    unsigned int rows = view_rows;
-    bool use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
+    unsigned int cols;
+    unsigned int rows;
+    bool use_fb;
 
     if (!console_ensure_layout()) {
         return;
     }
+
+    console_sanitize_state();
+    cols = console_cols();
+    rows = view_rows;
+    use_fb = (renderer_get_mode() == RENDER_FB) && fb_is_available();
 
     if (scroll_lines_from_bottom > 0) {
         scroll_lines_from_bottom--;

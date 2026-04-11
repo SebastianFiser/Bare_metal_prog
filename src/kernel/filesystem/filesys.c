@@ -4,6 +4,11 @@
 #include "heap.h"
 
 static fs_node_t *root = 0;
+#define FS_NAME_MAX 64
+#define FS_CHILD_INIT_CAP 4
+
+static char *fs_strdup_limited(const char *src, unsigned int max_len);
+static int fs_ensure_children_capacity(fs_node_t *parent, unsigned int required);
 
 static int fs_strlen_local(const char* str) {
     int len = 0;
@@ -46,7 +51,8 @@ fs_node_t *fs_find_child(fs_node_t *parent, const char *name) {
     }
 
     for (unsigned int i = 0; i < parent->child_count; i++) {
-        if (strcmp(parent->children[i]->name, name) == 0) {
+        if (parent->children[i] && parent->children[i]->name &&
+            strcmp(parent->children[i]->name, name) == 0) {
             return parent->children[i];
         }
     }
@@ -107,36 +113,30 @@ fs_node_t *fs_resolve_path(fs_node_t *start, const char *path) {
 
 int fs_create(fs_node_t *parent, const char* name, fs_node_type_t type) {
     fs_node_t *node;
+    char *dup_name;
 
-    if (!parent || parent->type != FS_NODE_DIR || !name || !name[0]) {
-        return -1;
-    }
+    if (!parent || parent->type != FS_NODE_DIR || !name || !name[0]) return -1;
 
-    if (fs_has_slash(name) || fs_strlen_local(name) >= (int)sizeof(parent->name)) {
-        return -1;
-    }
+    if (fs_has_slash(name) || fs_strlen_local(name) >= FS_NAME_MAX) return -1;
 
-    if (parent->child_count >= (sizeof(parent->children) / sizeof(parent->children[0]))) {
-        return -3;
-    }
+    if (fs_find_child(parent, name)) return -2;
 
-    if (fs_find_child(parent, name)) {
-        return -2;
-    }
+    if (fs_ensure_children_capacity(parent, parent->child_count + 1) != 0) return -3;
 
     node = fs_alloc_node();
-    if (!node) {
+    if (!node) return -3;
+
+    dup_name = fs_strdup_limited(name, FS_NAME_MAX);
+    if (!dup_name) {
+        kfree(node);
         return -3;
     }
 
-    strcpy(node->name, name);
+    node->name = dup_name;
     node->type = type;
     node->parent = parent;
-    node->size = 0;
-    node->data = 0;
-    node->capacity = 0;
-    parent->children[parent->child_count++] = node;
 
+    parent->children[parent->child_count++] = node;
     return 0;
 }
 
@@ -271,12 +271,20 @@ void fs_get_path(fs_node_t *dir, char *out, int out_size) {
 }
 
 void fs_init(void) {
+    if (root) {
+        fs_shutdown();
+    }
+
     root = fs_alloc_node();
-    if (!root) {
+    if (!root) return;
+
+    root->name = fs_strdup_limited("/", FS_NAME_MAX);
+    if (!root->name) {
+        kfree(root);
+        root = 0;
         return;
     }
 
-    strcpy(root->name, "/");
     root->type = FS_NODE_DIR;
     root->parent = 0;
 
@@ -304,9 +312,19 @@ static void fs_free_subtree(fs_node_t *node) {
     if (node->data) {
         kfree(node->data);
         node->data = 0;
-        node->capacity = 0;
-        node->size = 0;
     }
+    if (node->name) {
+        kfree(node->name);
+        node->name = 0;
+    }
+    if (node->children) {
+        kfree(node->children);
+        node->children = 0;
+    }
+
+    node->capacity = 0;
+    node->size = 0;
+    node->child_capacity = 0;
 
     kfree(node);
 }
@@ -335,4 +353,59 @@ int fs_delete(fs_node_t *cwd, const char *path) {
 
     fs_free_subtree(node);
     return 0;
+}
+
+static char *fs_strdup_limited(const char *src, unsigned int max_len) {
+    unsigned int len = 0;
+    char *dst;
+
+    if(!src || !src[0]) return 0;
+
+    while (src[len] && len < max_len) {
+        len++;
+    }
+
+    if (src[len] != '\0')
+        return 0;
+
+    dst = (char*)kmalloc(len + 1);
+    if (!dst) return 0;
+
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+    return dst;
+}
+
+static int fs_ensure_children_capacity(fs_node_t *parent, unsigned int required) {
+    fs_node_t **new_children;
+    unsigned int new_capacity;
+
+    if (!parent) return -1;
+    if (parent->child_capacity >= required) return 0;
+
+    new_capacity = parent->child_capacity > 0 ? parent->child_capacity : FS_CHILD_INIT_CAP;
+    while (new_capacity < required) {
+        new_capacity *= 2;
+    }
+
+    new_children = (fs_node_t**)kmalloc(sizeof(fs_node_t*) * new_capacity);
+    if (!new_children) return -1;
+
+    memset(new_children, 0, sizeof(fs_node_t*) * new_capacity);
+
+    if (parent->children) {
+        memcpy(new_children, parent->children, sizeof(fs_node_t*) * parent->child_count);
+        kfree(parent->children);
+    }
+    parent->children = new_children;
+    parent->child_capacity = new_capacity;
+    return 0;
+
+}
+
+void fs_shutdown(void) {
+    if (root) {
+        fs_free_subtree(root);
+        root = 0;
+    }
 }
