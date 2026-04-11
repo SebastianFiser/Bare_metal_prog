@@ -30,8 +30,8 @@ void editor_buffers_init(void) {
 		kfree(current_file);
 	}
 
-	text_buf = (char*)kcalloc(sizeof(char), MEOWIM_BUF_MAX);
-	current_file = (char*)kcalloc(sizeof(char), MEOWIM_NAME_MAX);
+	text_buf = (char*)kcalloc_tag(sizeof(char), MEOWIM_BUF_MAX, "editor_text_buf");
+	current_file = (char*)kcalloc_tag(sizeof(char), MEOWIM_NAME_MAX, "editor_current_file");
 
 	if (!text_buf || !current_file) {
 		PANIC("Failed to allocate editor buffers");

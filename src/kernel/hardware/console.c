@@ -111,11 +111,11 @@ static bool console_alloc_buffers(unsigned int new_cols, unsigned int new_rows, 
         return false;
     }
 
-    new_history_chars = (char*)kcalloc(sizeof(char), HISTORY_LINES * new_cols);
-    new_history_colors = (unsigned char*)kcalloc(sizeof(unsigned char), HISTORY_LINES * new_cols);
-    new_fb_prev_chars = (char*)kcalloc(sizeof(char), new_rows * new_cols);
-    new_fb_prev_colors = (unsigned char*)kcalloc(sizeof(unsigned char), new_rows * new_cols);
-    new_fb_prev_valid = (bool*)kcalloc(sizeof(bool), new_rows * new_cols);
+    new_history_chars = (char*)kcalloc_tag(sizeof(char), HISTORY_LINES * new_cols, "console_history_chars");
+    new_history_colors = (unsigned char*)kcalloc_tag(sizeof(unsigned char), HISTORY_LINES * new_cols, "console_history_colors");
+    new_fb_prev_chars = (char*)kcalloc_tag(sizeof(char), new_rows * new_cols, "console_fb_prev_chars");
+    new_fb_prev_colors = (unsigned char*)kcalloc_tag(sizeof(unsigned char), new_rows * new_cols, "console_fb_prev_colors");
+    new_fb_prev_valid = (bool*)kcalloc_tag(sizeof(bool), new_rows * new_cols, "console_fb_prev_valid");
 
     if (!new_history_chars || !new_history_colors || !new_fb_prev_chars || !new_fb_prev_colors || !new_fb_prev_valid) {
         if (new_history_chars) kfree(new_history_chars);
@@ -895,8 +895,8 @@ bool console_save_state(console_state_t *state) {
 
     console_free_saved_state();
 
-    saved_history_chars = (char*)kcalloc(sizeof(char), HISTORY_LINES * history_cols);
-    saved_history_colors = (unsigned char*)kcalloc(sizeof(unsigned char), HISTORY_LINES * history_cols);
+    saved_history_chars = (char*)kcalloc_tag(sizeof(char), HISTORY_LINES * history_cols, "console_saved_history_chars");
+    saved_history_colors = (unsigned char*)kcalloc_tag(sizeof(unsigned char), HISTORY_LINES * history_cols, "console_saved_history_colors");
     if (!saved_history_chars || !saved_history_colors) {
         console_free_saved_state();
         return false;

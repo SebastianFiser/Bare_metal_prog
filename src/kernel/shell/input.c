@@ -15,7 +15,7 @@ void input_buffers_init(void) {
     if (line_buffer) {
         kfree(line_buffer);
     }
-    line_buffer = (char*)kcalloc(sizeof(char), LINE_MAX);
+    line_buffer = (char*)kcalloc_tag(sizeof(char), LINE_MAX, "input_line_buffer");
     if (!line_buffer) {
         PANIC("failed to allocate input line buffer");
     }

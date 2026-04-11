@@ -35,7 +35,7 @@ static int fs_has_slash(const char *name) {
 }
 
 static fs_node_t *fs_alloc_node(void) {
-    fs_node_t *node = (fs_node_t *)kmalloc(sizeof(fs_node_t));
+    fs_node_t *node = (fs_node_t *)kmalloc_tag(sizeof(fs_node_t), "fs_node");
     if (!node) return 0;
     memset(node, 0, sizeof(fs_node_t));
     return node;
@@ -61,6 +61,7 @@ fs_node_t *fs_find_child(fs_node_t *parent, const char *name) {
 
 fs_node_t *fs_resolve_path(fs_node_t *start, const char *path) {
     fs_node_t *node = start ? start : root;
+    char *part = 0;
 
     if (!node) {
         return 0;
@@ -75,8 +76,10 @@ fs_node_t *fs_resolve_path(fs_node_t *start, const char *path) {
         path++;
     }
 
+    part = (char*)kmalloc_tag(32, "fs_path_part");
+    if (!part) return 0;
+
     while (*path) {
-        char part[32];
         unsigned int len = 0;
 
         while (*path == '/') {
@@ -86,7 +89,7 @@ fs_node_t *fs_resolve_path(fs_node_t *start, const char *path) {
             break;
         }
 
-        while (*path && *path != '/' && len < (sizeof(part) - 1)) {
+        while (*path && *path != '/' && len < 31) {
             part[len++] = *path++;
         }
         part[len] = '\0';
@@ -104,10 +107,12 @@ fs_node_t *fs_resolve_path(fs_node_t *start, const char *path) {
 
         node = fs_find_child(node, part);
         if (!node) {
+            kfree(part);
             return 0;
         }
     }
 
+    if (part) kfree(part);
     return node;
 }
 
@@ -163,7 +168,7 @@ int fs_write(fs_node_t *cwd, const char* name, const char* data) {
     needed = (unsigned int)data_len + 1; // include '\0'
 
     if (node->capacity < needed) {
-        new_buf = (char*)kmalloc(needed);
+        new_buf = (char*)kmalloc_tag(needed, "fs_data");
         if (!new_buf) {
             return -3; // no memory
         }
@@ -368,7 +373,7 @@ static char *fs_strdup_limited(const char *src, unsigned int max_len) {
     if (src[len] != '\0')
         return 0;
 
-    dst = (char*)kmalloc(len + 1);
+    dst = (char*)kmalloc_tag(len + 1, "fs_name");
     if (!dst) return 0;
 
     memcpy(dst, src, len);
@@ -388,7 +393,7 @@ static int fs_ensure_children_capacity(fs_node_t *parent, unsigned int required)
         new_capacity *= 2;
     }
 
-    new_children = (fs_node_t**)kmalloc(sizeof(fs_node_t*) * new_capacity);
+    new_children = (fs_node_t**)kmalloc_tag(sizeof(fs_node_t*) * new_capacity, "fs_children");
     if (!new_children) return -1;
 
     memset(new_children, 0, sizeof(fs_node_t*) * new_capacity);

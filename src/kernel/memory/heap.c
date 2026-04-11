@@ -4,6 +4,7 @@
 __attribute__((aligned(8)))
 static unsigned char heap[HEAP_SIZE];
 static block_t* free_list;
+static const char *heap_default_tag = "generic";
 
 static int ptr_in_heap(const void *ptr) {
     const unsigned char *p = (const unsigned char*)ptr;
@@ -17,11 +18,12 @@ void heap_init() {
 
     free_list->size = HEAP_SIZE - sizeof(block_t);
     free_list->free = 1;
+    free_list->tag = 0;
     free_list->next = NULL;
 }
 
 //size = (size + 7) & ~7;
-void* kmalloc(size_t size) {
+void* kmalloc_tag(size_t size, const char *tag) {
     if (size == 0) return NULL;
     //align size
     size = (size + 7) & ~7;
@@ -34,6 +36,7 @@ void* kmalloc(size_t size) {
                 block_t* new_block = (block_t*)((char*)(curr + 1) + size);
                 new_block->size = curr->size - size - sizeof(block_t);
                 new_block->free = 1;
+                new_block->tag = 0;
                 new_block->next = curr->next;
                 new_block->magic = HEAP_MAGIC;
                 curr->size = size;
@@ -41,11 +44,16 @@ void* kmalloc(size_t size) {
             }
             curr->free = 0;
             curr->magic = HEAP_MAGIC;
+            curr->tag = tag ? tag : heap_default_tag;
             return (void*)(curr+1);
         }
         curr = curr->next; 
     }
     return NULL;
+}
+
+void* kmalloc(size_t size) {
+    return kmalloc_tag(size, heap_default_tag);
 }
 
 void kfree(void* ptr) {
@@ -64,6 +72,7 @@ void kfree(void* ptr) {
 
     ASSERT(curr->free == 0);
     curr->free = 1;
+    curr->tag = 0;
 
     // Coalesce adjacent free blocks to reduce fragmentation.
     curr = free_list;
@@ -86,8 +95,9 @@ void heap_dump(void) {
         unsigned int block_addr = (unsigned int)curr;
         unsigned int payload_addr = (unsigned int)(curr + 1);
         unsigned int next_addr = (unsigned int)curr->next;
-        console_write("blk %d: hdr=0x%x data=0x%x size=%d free=%d next=0x%x\n",
-                      index, block_addr, payload_addr, curr->size, curr->free, next_addr);
+        console_write("blk %d: hdr=0x%x data=0x%x size=%d free=%d tag=%s next=0x%x\n",
+                      index, block_addr, payload_addr, curr->size, curr->free,
+                      curr->tag ? curr->tag : "-", next_addr);
         curr = curr->next;
         index++;
         if (index > 1024) {
@@ -125,14 +135,24 @@ void heap_validate(void) {
 }
 
 void* kzalloc(size_t size) {
-    void* p = kmalloc(size);
+    void* p = kmalloc_tag(size, heap_default_tag);
     if (!p) return NULL;
     memset(p, 0, size);
     return p;
 }
 
-void* kcalloc(size_t size, size_t count) {
+void* kcalloc_tag(size_t size, size_t count, const char *tag) {
+    void* p;
+
     if(count == 0 || size == 0) return NULL;
     if (count > ((size_t)-1) / size) return NULL;
-    return kzalloc(count * size);
+
+    p = kmalloc_tag(count * size, tag);
+    if (!p) return NULL;
+    memset(p, 0, count * size);
+    return p;
+}
+
+void* kcalloc(size_t size, size_t count) {
+    return kcalloc_tag(size, count, heap_default_tag);
 }

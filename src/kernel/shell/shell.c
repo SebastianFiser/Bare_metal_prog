@@ -22,14 +22,14 @@ static fs_node_t *current_dir = 0;
 
 static int shell_ensure_buffers(void) {
     if (!shell_read_buf) {
-        shell_read_buf = (char*)kcalloc(sizeof(char), SHELL_READ_BUF_SIZE);
+        shell_read_buf = (char*)kcalloc_tag(sizeof(char), SHELL_READ_BUF_SIZE, "shell_read_buf");
         if (!shell_read_buf) {
             return 0;
         }
     }
 
     if (!shell_path_buf) {
-        shell_path_buf = (char*)kcalloc(sizeof(char), SHELL_PATH_BUF_SIZE);
+        shell_path_buf = (char*)kcalloc_tag(sizeof(char), SHELL_PATH_BUF_SIZE, "shell_path_buf");
         if (!shell_path_buf) {
             return 0;
         }
@@ -191,9 +191,9 @@ static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]) {
     unsigned int iterations = 100;
     unsigned int ok = 0;
     unsigned int fail = 0;
-    char dname[24];
-    char fname[24];
-    char read_back[32];
+    char *dname = 0;
+    char *fname = 0;
+    char *read_back = 0;
     const char *payload = "ramfs_stress_payload";
 
     shell_ensure_current_dir();
@@ -209,11 +209,24 @@ static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]) {
         iterations = 1000;
     }
 
+    /* Allocate temp buffers on heap */
+    dname = (char*)kmalloc_tag(24, "fstress_dname");
+    fname = (char*)kmalloc_tag(24, "fstress_fname");
+    read_back = (char*)kmalloc_tag(32, "fstress_read_back");
+    
+    if (!dname || !fname || !read_back) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "fstress: out of memory\n");
+        if (dname) kfree(dname);
+        if (fname) kfree(fname);
+        if (read_back) kfree(read_back);
+        return;
+    }
+
     console_write("fstress: starting %d iterations\n", iterations);
 
     for (unsigned int i = 0; i < iterations; i++) {
-        build_test_name("d", i, dname, sizeof(dname));
-        build_test_name("f", i, fname, sizeof(fname));
+        build_test_name("d", i, dname, 24);
+        build_test_name("f", i, fname, 24);
 
         if (fs_create(current_dir, dname, FS_NODE_DIR) < 0) {
             fail++;
@@ -233,7 +246,7 @@ static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]) {
             continue;
         }
 
-        if (fs_read(current_dir, fname, read_back, sizeof(read_back)) < 0) {
+        if (fs_read(current_dir, fname, read_back, 32) < 0) {
             fs_delete(current_dir, fname);
             fs_delete(current_dir, dname);
             fail++;
@@ -255,6 +268,12 @@ static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]) {
     }
 
     console_write("fstress: ok=%d fail=%d\n", ok, fail);
+    
+    /* Free temp buffers */
+    kfree(dname);
+    kfree(fname);
+    kfree(read_back);
+    
     heap_validate();
 }
 

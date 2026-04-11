@@ -9,6 +9,7 @@ typedef struct block {
     unsigned int magic;
     size_t size;
     int free;
+    const char *tag;
     struct block* next;
 } block_t;
 
@@ -19,9 +20,11 @@ typedef struct block {
     }
 
 void heap_init(void);
+void* kmalloc_tag(size_t size, const char *tag);
 void* kmalloc(size_t size);
 void kfree(void* ptr);
 void* kzalloc(size_t size);
+void* kcalloc_tag(size_t size, size_t count, const char *tag);
 void* kcalloc(size_t size, size_t count);
 
 void heap_dump(void);
