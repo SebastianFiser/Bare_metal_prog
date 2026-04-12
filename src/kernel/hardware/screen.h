@@ -6,6 +6,8 @@ void fb_init(uint32_t multiboot_info_ptr);
 bool fb_is_available(void);
 uint32_t fb_get_width(void);
 uint32_t fb_get_height(void);
+uint32_t fb_get_pitch(void);
+uint32_t fb_get_address(void);
 
 typedef struct {
     uint32_t* address;

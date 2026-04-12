@@ -43,6 +43,14 @@ uint32_t fb_get_height(void) {
     return fb.height;
 }
 
+uint32_t fb_get_pitch(void) {
+    return fb.pitch;
+}
+
+uint32_t fb_get_address(void) {
+    return (uint32_t)fb.address;
+}
+
 typedef struct {
     char ch;
     uint8_t rows[FB_FONT_HEIGHT];

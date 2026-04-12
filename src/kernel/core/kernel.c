@@ -7,6 +7,7 @@
 #include "input.h"
 #include "meowim.h"
 #include "screen.h"
+#include "paging.h"
 
 static console_state_t vga_boot_state;
 
@@ -102,6 +103,14 @@ __attribute__((naked)) void isr13() {
     );
 }
 
+// isr14 - Page Fault (CPU already pushes error code)
+__attribute__((naked)) void isr14() {
+    __asm__ __volatile__ (
+        "pushl $14 \n\t"
+        "jmp common_stub \n\t"
+    );
+}
+
 __attribute__((naked)) void isr32() {
     __asm__ __volatile__ (
         "pushl $0 \n\t"   // Push error code (0 for IRQ)
@@ -139,6 +148,7 @@ void idt_init(void) {
 
     idt_set_gate(0, (unsigned int)isr0, 0x08, 0x8E);
     idt_set_gate(13, (unsigned int)isr13, 0x08, 0x8E);
+    idt_set_gate(14, (unsigned int)isr14, 0x08, 0x8E);
     idt_set_gate(32, (unsigned int)isr32 , 0x08, 0x8E);
     idt_set_gate(33, (unsigned int)isr33, 0x08, 0x8E);
 
@@ -179,17 +189,26 @@ void read_uptime(unsigned int *seconds, unsigned int *milliseconds) {
 void trap_handler_logic(struct registers *regs) {
     if (regs->int_no == 33) {
         keyboard_handler(regs);
+        return;
     }
     else if (regs->int_no == 32) {
         tick_handler();
-    outb(0x20, 0x20); // EOI master
-    return;
+        outb(0x20, 0x20); // EOI master
+        return;
     }
     else if (regs->int_no == 0) {
         PANIC("Division by zero");
     } 
     else if (regs->int_no == 13) {
         PANIC("General Protection Fault");
+    }
+    else if (regs->int_no == 14) {
+        uint32_t cr2;
+        uint32_t pde;
+        uint32_t pte;
+        __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+        paging_debug_lookup(cr2, &pde, &pte);
+        PANIC("Page Fault: cr2=0x%x err=0x%x eip=0x%x pde=0x%x pte=0x%x", cr2, regs->err_code, regs->eip, pde, pte);
     }
     else {
         console_write("Unhandled interrupt: %d\n", regs->int_no);
@@ -202,7 +221,12 @@ void init_filesys(void)
 }
 
 static void VGA_INIT(uint32_t multiboot_info_ptr) {
+    uint32_t fb_base = fb_get_address();
+    uint32_t fb_size = fb_get_pitch() * fb_get_height();
+
     heap_init();
+    paging_init(fb_base, fb_size);
+    paging_enable();
     input_buffers_init();
     editor_buffers_init();
     console_write("heap initialized\n");
