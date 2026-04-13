@@ -9,17 +9,59 @@
     <script src="coi-serviceworker.js"></script>
     <!-- v86 emulator served locally (downloaded during CI build) -->
     <script src="libv86.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background-color: #222;
+            color: white;
+            font-family: sans-serif;
+        }
+
+        #screen_container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: calc(100vh - 46px);
+            padding: 10px;
+            box-sizing: border-box;
+        }
+
+        #screen_container > div {
+            white-space: pre;
+            font: 16px monospace;
+            line-height: 16px;
+            width: min(96vw, 1400px);
+            height: min(calc(100vh - 80px), 900px);
+            max-width: 100%;
+            max-height: 100%;
+            overflow: auto;
+            background: #000;
+        }
+
+        #screen_container > canvas {
+            max-width: min(96vw, 1400px);
+            max-height: min(calc(100vh - 80px), 900px);
+            width: 100%;
+            height: auto;
+            image-rendering: pixelated;
+            background: #000;
+        }
+    </style>
 </head>
-<body style="margin:0; background-color:#222; color:white; font-family:sans-serif;">
+<body>
 
     <div style="padding:12px; background:#111; border-bottom:1px solid #444; font-size:14px;">
         <strong>Live Demo status:</strong>
         <span id="status">inicializuji...</span>
     </div>
 
-    <div id="screen_container" style="display:flex; justify-content:center; align-items:center; height:calc(100vh - 46px);">
+    <div id="screen_container">
         <!-- Zde se vykreslí obrazovka vašeho OS -->
-        <div style="white-space: pre; font: 14px monospace; line-height: 14px;"></div>
+        <div></div>
         <canvas style="display: none;" aria-label="Emulator display"></canvas>
     </div>
 
@@ -48,6 +90,7 @@
                     wasm_path: "v86.wasm",
                     memory_size: 2 * 1024 * 1024 * 1024,
                     vga_memory_size: 16 * 1024 * 1024,
+                    screen_scale: 1.35,
                     screen_container: document.getElementById("screen_container"),
                     cdrom: {
                         url: "./os.iso",
