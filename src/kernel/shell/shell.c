@@ -7,6 +7,7 @@
 #include "heap.h"
 #include "renderer.h"
 #include "screen.h"
+#include "paging.h"
 
 #define SHELL_MAX_ARGS 8
 #define SHELL_MAX_TOKEN 32
@@ -95,6 +96,36 @@ static int shell_tokenize(const char *in, char argv[][SHELL_MAX_TOKEN]) {
     return argc;
 }
 
+uint32_t parse_vm_flags(const char *flag1, const char *flag2) {
+    uint32_t flags = PAGE_PRESENT;
+
+    if (flag1) {
+        if (strcmp(flag1, "rw") == 0) {
+            flags |= PAGE_RW;
+        }
+        else if (strcmp(flag1, "ro") == 0) {
+            // read-only, do nothing
+        }
+        else {
+            console_write_colored(CONSOLE_COLOR_ERROR, "Invalid flags. Usage: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [rw|ro] [user|kernel]\n");
+            return 0;
+        }
+    }
+    if (flag2) {
+        if (strcmp(flag2, "user") == 0) {
+            flags |= PAGE_USER;
+        }
+        else if (strcmp(flag2, "kernel") == 0) {
+            // kernel page, do nothing
+        }
+        else {
+            console_write_colored(CONSOLE_COLOR_ERROR, "Invalid flags. Usage: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [rw|ro] [user|kernel]\n");
+            return 0;
+        }
+    }
+    return flags;
+}
+
 static void cmd_help(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void whatisthis(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void whoami(int argc, char argv[][SHELL_MAX_TOKEN]);
@@ -110,8 +141,12 @@ static void cmd_heap_dump(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_heap_validate(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_fs_stress(int argc, char argv[][SHELL_MAX_TOKEN]);
 static int parse_uint_arg(const char *s, unsigned int *out);
+static int parse_u32_addr_arg(const char *s, uint32_t *out);
 static void build_test_name(const char *prefix, unsigned int idx, char *out, unsigned int out_size);
 static void mem_block_dump(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_vm_lookup(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_vmap(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_unmap(int argc, char argv[][SHELL_MAX_TOKEN]);
     
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
@@ -129,9 +164,45 @@ static const shell_command_t commands[] = {
     {"memdump", "dump heap metadata for debugging", cmd_heap_dump},
     {"memvalidate", "validate heap integrity for debugging", cmd_heap_validate},
     {"mblckdump", "dump one heap block: mblckdump <block> [bytes] [h|t|a] [p]", mem_block_dump},
+    {"vm", "inspect mapping: vm <virt_addr_dec_or_0xhex>", cmd_vm_lookup},
+    {"vmap", "map virtual memory: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [flags]", cmd_vmap},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void cmd_vmap(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    uint32_t virt;
+    uint32_t phys;
+    uint32_t flags;
+
+    if (argc < 5) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [rw|ro] [user|kernel]\n");
+        return;
+    }
+    if (!parse_u32_addr_arg(argv[1], &virt)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid virtual address\n");
+        return;
+    }
+    if (!parse_u32_addr_arg(argv[2], &phys)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid physical address\n");
+        return;
+    }
+    flags = parse_vm_flags(argv[3], argv[4]);
+    if (flags == 0) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid flags. Usage: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [rw|ro] [user|kernel]\n");
+        return;
+    }
+    if ((virt & 0xFFF) != 0) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid virtual address. Must be page-aligned.\n");
+        return;
+    }
+    if ((phys & 0xFFF) != 0) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid physical address. Must be page-aligned.\n");
+        return;
+    }
+    map_page(virt, phys, flags);
+    console_write("Mapped virt 0x%x to phys 0x%x with flags 0x%x\n", virt, phys, flags);
+}
 
 static void mem_block_dump(int argc, char argv[][SHELL_MAX_TOKEN]) {
     unsigned int block_num = 0;
@@ -206,6 +277,74 @@ static int parse_uint_arg(const char *s, unsigned int *out) {
 
     *out = value;
     return 1;
+}
+
+static int parse_u32_addr_arg(const char *s, uint32_t *out) {
+    uint32_t value = 0;
+    unsigned int i = 0;
+    int base = 10;
+
+    if (!s || !s[0] || !out) {
+        return 0;
+    }
+
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        base = 16;
+        i = 2;
+        if (!s[i]) {
+            return 0;
+        }
+    }
+
+    for (; s[i] != '\0'; i++) {
+        uint32_t digit;
+
+        if (base == 10) {
+            if (s[i] < '0' || s[i] > '9') {
+                return 0;
+            }
+            digit = (uint32_t)(s[i] - '0');
+            value = value * 10U + digit;
+        } else {
+            if (s[i] >= '0' && s[i] <= '9') {
+                digit = (uint32_t)(s[i] - '0');
+            } else if (s[i] >= 'a' && s[i] <= 'f') {
+                digit = (uint32_t)(10 + (s[i] - 'a'));
+            } else if (s[i] >= 'A' && s[i] <= 'F') {
+                digit = (uint32_t)(10 + (s[i] - 'A'));
+            } else {
+                return 0;
+            }
+            value = (value << 4U) | digit;
+        }
+    }
+
+    *out = value;
+    return 1;
+}
+
+static void cmd_vm_lookup(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    uint32_t virt;
+    uint32_t phys;
+    uint32_t pde;
+    uint32_t pte;
+    bool mapped;
+
+    if (argc < 2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: vm <virt_addr_dec_or_0xhex>\n");
+        return;
+    }
+
+    if (!parse_u32_addr_arg(argv[1], &virt)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid address: %s\n", argv[1]);
+        return;
+    }
+
+    mapped = is_mapped(virt);
+    phys = translate(virt);
+    paging_debug_lookup(virt, &pde, &pte);
+
+    console_write("vm: virt=0x%x mapped=%d phys=0x%x pde=0x%x pte=0x%x\n", virt, mapped ? 1 : 0, phys, pde, pte);
 }
 
 static void build_test_name(const char *prefix, unsigned int idx, char *out, unsigned int out_size) {

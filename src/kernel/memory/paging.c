@@ -6,11 +6,35 @@ static page_table_t kernel_ptabs_all[1024] __attribute__((aligned(4096)));
 #define PAGE_SIZE_4K 0x1000U
 #define PAGE_SIZE_4M 0x400000U
 
+static inline void invlpg(uint32_t vaddr) {
+    __asm__ volatile ("invlpg (%0)" : : "r"(vaddr) : "memory");
+}
+
+static page_table_t *get_table(uint32_t pde_index, int create, uint32_t flags) {
+    uint32_t pde = kernel_pdir.entries[pde_index];
+
+    if ((pde & PAGE_PRESENT) != 0U) {
+        return (page_table_t*)(pde & PAGE_FRAME_MASK);
+    }
+
+    if (!create) {
+        return NULL;
+    }
+
+    memset(&kernel_ptabs_all[pde_index], 0, sizeof(page_table_t));
+    kernel_pdir.entries[pde_index] = ((uint32_t)&kernel_ptabs_all[pde_index])
+        | PAGE_PRESENT
+        | PAGE_RW
+        | (flags & PAGE_USER);
+
+    return &kernel_ptabs_all[pde_index];
+}
+
 static void map_4m_region(uint32_t pde_index, uint32_t phys_base, page_table_t *table) {
-    kernel_pdir.entries[pde_index] = ((uint32_t)table) | 0x3U;
+    kernel_pdir.entries[pde_index] = ((uint32_t)table) | PAGE_PRESENT | PAGE_RW;
 
     for (uint32_t j = 0; j < 1024U; j++) {
-        table->entries[j] = (phys_base + (j * PAGE_SIZE_4K)) | 0x3U;
+        table->entries[j] = (phys_base + (j * PAGE_SIZE_4K)) | PAGE_PRESENT | PAGE_RW;
     }
 }
 
@@ -61,4 +85,60 @@ void paging_debug_lookup(uint32_t vaddr, uint32_t *out_pde, uint32_t *out_pte) {
     if (out_pte) {
         *out_pte = pt->entries[pte_index];
     }
+}
+
+void map_page(uint32_t virt, uint32_t phys, uint32_t flags) {
+    uint32_t pde_index = (virt >> 22) & 0x3FFU;
+    uint32_t pte_index = (virt >> 12) & 0x3FFU;
+    page_table_t *pt = get_table(pde_index, 1, flags);
+    uint32_t entry_flags = (flags & ~PAGE_FRAME_MASK) | PAGE_PRESENT;
+
+    pt->entries[pte_index] = (phys & PAGE_FRAME_MASK) | entry_flags;
+    invlpg(virt);
+}
+
+void unmap_page(uint32_t virt) {
+    uint32_t pde_index = (virt >> 22) & 0x3FFU;
+    uint32_t pte_index = (virt >> 12) & 0x3FFU;
+    page_table_t *pt = get_table(pde_index, 0, 0U);
+
+    if (!pt) {
+        return;
+    }
+
+    pt->entries[pte_index] = 0U;
+    invlpg(virt);
+}
+
+bool is_mapped(uint32_t virt) {
+    uint32_t pde_index = (virt >> 22) & 0x3FFU;
+    uint32_t pte_index = (virt >> 12) & 0x3FFU;
+    uint32_t pde = kernel_pdir.entries[pde_index];
+
+    if ((pde & PAGE_PRESENT) == 0U) {
+        return false;
+    }
+
+    page_table_t *pt = (page_table_t*)(pde & PAGE_FRAME_MASK);
+    return (pt->entries[pte_index] & PAGE_PRESENT) != 0U;
+}
+
+uint32_t translate(uint32_t virt) {
+    uint32_t pde_index = (virt >> 22) & 0x3FFU;
+    uint32_t pte_index = (virt >> 12) & 0x3FFU;
+    uint32_t page_offset = virt & 0xFFFU;
+    uint32_t pde = kernel_pdir.entries[pde_index];
+
+    if ((pde & PAGE_PRESENT) == 0U) {
+        return 0U;
+    }
+
+    page_table_t *pt = (page_table_t*)(pde & 0xFFFFF000U);
+    uint32_t pte = pt->entries[pte_index];
+
+    if ((pte & PAGE_PRESENT) == 0U) {
+        return 0U;
+    }
+
+    return (pte & PAGE_FRAME_MASK) | page_offset;
 }
