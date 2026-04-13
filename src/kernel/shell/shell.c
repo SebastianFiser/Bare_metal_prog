@@ -8,6 +8,7 @@
 #include "renderer.h"
 #include "screen.h"
 #include "paging.h"
+#include "process.h"
 
 #define SHELL_MAX_ARGS 8
 #define SHELL_MAX_TOKEN 32
@@ -147,6 +148,14 @@ static void mem_block_dump(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_vm_lookup(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_vmap(int argc, char argv[][SHELL_MAX_TOKEN]);
 static void cmd_unmap(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_ps(int argc, char argv[][SHELL_MAX_TOKEN]);
+static const char *process_state_name(process_state_t state);
+static size_t ps_strnlen(const char *s, size_t max_len);
+static unsigned int ps_int_width(int value);
+static void ps_write_text_col(const char *text, unsigned int width);
+static void ps_write_int_col(int value, unsigned int width);
+static void ps_write_sep_line(void);
+static void cmd_pspawn(int argc, char argv[][SHELL_MAX_TOKEN]);
     
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
@@ -167,9 +176,136 @@ static const shell_command_t commands[] = {
     {"vm", "inspect mapping: vm <virt_addr_dec_or_0xhex>", cmd_vm_lookup},
     {"vmap", "map virtual memory: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [flags]", cmd_vmap},
     {"vunmap", "unmap virtual memory: vunmap <virt_addr_dec_or_0xhex>", cmd_unmap},
+    {"ps", "show all current running processes", cmd_ps},
+    {"pspawn", "spawn a process: spawn <name>", cmd_pspawn},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void cmd_pspawn(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    if (argc != 2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: spawn name\n");
+        return;
+    }
+    if (argv[1][0] == '\0') {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Process name cannot be empty\n");
+        return;
+    }
+    process_create(argv[1], NULL);
+    console_write("Spawned process '%s'\n", argv[1]);
+}
+
+static const char *process_state_name(process_state_t state) {
+    switch (state) {
+        case PROCESS_NEW: return "NEW";
+        case PROCESS_READY: return "READY";
+        case PROCESS_RUNNING: return "RUNNING";
+        case PROCESS_BLOCKED: return "BLOCKED";
+        case PROCESS_ZOMBIE: return "ZOMBIE";
+        default: return "UNKNOWN";
+    }
+}
+
+static size_t ps_strnlen(const char *s, size_t max_len) {
+    size_t n = 0;
+    if (!s) {
+        return 0;
+    }
+    while (n < max_len && s[n] != '\0') {
+        n++;
+    }
+    return n;
+}
+
+static unsigned int ps_int_width(int value) {
+    unsigned int width = 1;
+    unsigned int magnitude;
+
+    if (value < 0) {
+        width++;
+        magnitude = (unsigned int)(-value);
+    } else {
+        magnitude = (unsigned int)value;
+    }
+
+    while (magnitude >= 10U) {
+        magnitude /= 10U;
+        width++;
+    }
+
+    return width;
+}
+
+static void ps_write_text_col(const char *text, unsigned int width) {
+    size_t len = ps_strnlen(text, (size_t)width);
+    unsigned int i;
+
+    if (!text) {
+        text = "";
+        len = 0;
+    }
+
+    for (i = 0; i < (unsigned int)len; i++) {
+        console_putchar(text[i]);
+    }
+
+    for (; i < width; i++) {
+        console_putchar(' ');
+    }
+}
+
+static void ps_write_int_col(int value, unsigned int width) {
+    unsigned int printed = ps_int_width(value);
+
+    console_write("%d", value);
+
+    if (printed < width) {
+        unsigned int i;
+        for (i = printed; i < width; i++) {
+            console_putchar(' ');
+        }
+    }
+}
+
+static void ps_write_sep_line(void) {
+    for (unsigned int i = 0; i < 42; i++) {
+        console_putchar('-');
+    }
+    console_putchar('\n');
+}
+
+static void cmd_ps(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    size_t count = 0;
+    const process_t *table = process_table_get(&count);
+    process_t *current = process_get_current();
+
+    (void)argc;
+    (void)argv;
+
+    if (!table) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Failed to get process table\n");
+        return;
+    }
+
+    ps_write_text_col("PID", 6);
+    ps_write_text_col("PPID", 6);
+    ps_write_text_col("STATE", 11);
+    ps_write_text_col("CUR", 5);
+    console_write("NAME\n");
+    ps_write_sep_line();
+
+    for (size_t i = 0; i < count; i ++) {
+        if (table[i].pid < 0)
+            continue;
+
+        ps_write_int_col(table[i].pid, 6);
+        ps_write_int_col(table[i].parent_pid, 6);
+        ps_write_text_col(process_state_name(table[i].state), 11);
+        ps_write_text_col((current && current->pid == table[i].pid) ? "*" : "-", 5);
+        console_write("%s\n", table[i].name);
+    }
+
+}
 
 static void cmd_unmap(int argc, char argv[][SHELL_MAX_TOKEN]) {
     uint32_t virt;

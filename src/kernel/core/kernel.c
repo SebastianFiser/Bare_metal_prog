@@ -8,6 +8,7 @@
 #include "meowim.h"
 #include "screen.h"
 #include "paging.h"
+#include "process.h"
 
 static console_state_t vga_boot_state;
 
@@ -239,6 +240,13 @@ static void VGA_INIT(uint32_t multiboot_info_ptr) {
     heap_init();
     paging_init(fb_base, fb_size);
     paging_enable();
+    process_init();
+    process_t *curr = process_get_current();
+    if (curr == NULL) {
+        PANIC("Failed to get current process after paging enabled");
+    }
+    console_write("process initialized: pid=%d name=%s state=%d\n",
+              curr->pid, curr->name, curr->state);
     input_buffers_init();
     editor_buffers_init();
     console_write("heap initialized\n");
