@@ -200,7 +200,7 @@ void fb_init(uint32_t multiboot_info_ptr) {
             fb.pitch = fb_tag->framebuffer_pitch;
             fb.bpp = fb_tag->framebuffer_bpp;
 
-            console_write("FB: %x %dx%d pitch=%D bpp=%d\n", fb.address, fb.width, fb.height, fb.pitch, fb.bpp);
+            console_write("FB: %x %dx%d pitch=%d bpp=%d\n", fb.address, fb.width, fb.height, fb.pitch, fb.bpp);
             return;
         }
 

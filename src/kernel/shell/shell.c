@@ -166,10 +166,28 @@ static const shell_command_t commands[] = {
     {"mblckdump", "dump one heap block: mblckdump <block> [bytes] [h|t|a] [p]", mem_block_dump},
     {"vm", "inspect mapping: vm <virt_addr_dec_or_0xhex>", cmd_vm_lookup},
     {"vmap", "map virtual memory: vmap <virt_addr_dec_or_0xhex> <phys_addr_dec_or_0xhex> [flags]", cmd_vmap},
+    {"vunmap", "unmap virtual memory: vunmap <virt_addr_dec_or_0xhex>", cmd_unmap},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
 
+static void cmd_unmap(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    uint32_t virt;
+    if (argc != 2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: vunmap <virt_addr_dec_or_0xhex>\n");
+        return;
+    }
+    if (!parse_u32_addr_arg(argv[1], &virt)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid virtual address\n");
+        return;
+    }
+    if ((virt & 0xFFF) != 0) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid virtual address. Must be page-aligned.\n");
+        return;
+    }
+    unmap_page(virt);
+    console_write("Unmapped virt 0x%x\n", virt);
+}
 static void cmd_vmap(int argc, char argv[][SHELL_MAX_TOKEN]) {
     uint32_t virt;
     uint32_t phys;

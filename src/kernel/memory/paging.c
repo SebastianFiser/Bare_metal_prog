@@ -1,3 +1,5 @@
+extern unsigned char __kernel_start[];
+extern unsigned char __kernel_end[];
 #include "paging.h"
 
 static page_directory_t kernel_pdir __attribute__((aligned(4096)));
@@ -5,6 +7,26 @@ static page_table_t kernel_ptabs_all[1024] __attribute__((aligned(4096)));
 
 #define PAGE_SIZE_4K 0x1000U
 #define PAGE_SIZE_4M 0x400000U
+
+static inline uint32_t page_align_down(uint32_t addr) {
+    return addr & PAGE_FRAME_MASK;
+}
+
+static inline uint32_t page_align_up(uint32_t addr) {
+    return (addr + (PAGE_SIZE_4K - 1U)) & PAGE_FRAME_MASK;
+}
+
+static void map_identity_range(uint32_t start, uint32_t end, uint32_t flags) {
+    uint32_t curr = page_align_down(start);
+    uint32_t limit = page_align_up(end);
+
+    while (curr < limit) {
+        map_page(curr, curr, flags);
+        curr += PAGE_SIZE_4K;
+    }
+}
+
+
 
 static inline void invlpg(uint32_t vaddr) {
     __asm__ volatile ("invlpg (%0)" : : "r"(vaddr) : "memory");
@@ -30,25 +52,38 @@ static page_table_t *get_table(uint32_t pde_index, int create, uint32_t flags) {
     return &kernel_ptabs_all[pde_index];
 }
 
-static void map_4m_region(uint32_t pde_index, uint32_t phys_base, page_table_t *table) {
-    kernel_pdir.entries[pde_index] = ((uint32_t)table) | PAGE_PRESENT | PAGE_RW;
-
-    for (uint32_t j = 0; j < 1024U; j++) {
-        table->entries[j] = (phys_base + (j * PAGE_SIZE_4K)) | PAGE_PRESENT | PAGE_RW;
-    }
-}
-
 void paging_init(uint32_t fb_base, uint32_t fb_size) {
     page_directory_t *pdir = &kernel_pdir;
-    (void)fb_base;
-    (void)fb_size;
+    uint32_t kernel_start = (uint32_t)__kernel_start;
+    uint32_t kernel_end = (uint32_t)__kernel_end;
 
     memset(pdir, 0, sizeof(page_directory_t));
     memset(kernel_ptabs_all, 0, sizeof(kernel_ptabs_all));
 
-    for (uint32_t i = 0; i < 1024U; i++) {
-        map_4m_region(i, i * PAGE_SIZE_4M, &kernel_ptabs_all[i]);
+    map_identity_range(kernel_start, kernel_end, PAGE_RW);
+
+    if (fb_base != 0U) {
+        uint32_t map_size = (fb_size != 0U) ? fb_size : PAGE_SIZE_4K;
+        uint32_t fb_end = fb_base + map_size;
+
+        if (map_size < (16U * 1024U * 1024U)) {
+            map_size = 16U * 1024U * 1024U;
+            fb_end = fb_base + map_size;
+        }
+
+        if (map_size > (64U * 1024U * 1024U)) {
+            map_size = 64U * 1024U * 1024U;
+            fb_end = fb_base + map_size;
+        }
+
+        if (fb_end < fb_base) {
+            fb_end = 0xFFFFFFFFU;
+        }
+
+        map_identity_range(fb_base, fb_end, PAGE_RW | PAGE_CACHE_DISABLE);
     }
+
+    unmap_page(0x00000000U);
 }
 
 void paging_enable(void) {

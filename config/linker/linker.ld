@@ -9,6 +9,7 @@ PHDRS
 SECTIONS
 {
     . = 1M;
+    __kernel_start = .;
 
     /* MUST be first so GRUB finds it */
     .multiboot : {
@@ -36,4 +37,6 @@ SECTIONS
         *(.bss*)
         *(COMMON)
     } :data
+
+    __kernel_end = .;
 }

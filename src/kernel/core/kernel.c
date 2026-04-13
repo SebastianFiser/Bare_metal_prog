@@ -207,6 +207,15 @@ void trap_handler_logic(struct registers *regs) {
         uint32_t pde;
         uint32_t pte;
         __asm__ volatile ("mov %%cr2, %0" : "=r"(cr2));
+
+        /* Bring-up recovery: if we're in FB mode and a write fault lands on an unmapped page,
+           map that page on demand so framebuffer rendering can continue. */
+        if (fb_is_available() && renderer_get_mode() == RENDER_FB && (regs->err_code & 0x1U) == 0U) {
+            uint32_t page = cr2 & PAGE_FRAME_MASK;
+            map_page(page, page, PAGE_RW | PAGE_CACHE_DISABLE);
+            return;
+        }
+
         paging_debug_lookup(cr2, &pde, &pte);
         PANIC("Page Fault: cr2=0x%x err=0x%x eip=0x%x pde=0x%x pte=0x%x", cr2, regs->err_code, regs->eip, pde, pte);
     }
@@ -223,6 +232,9 @@ void init_filesys(void)
 static void VGA_INIT(uint32_t multiboot_info_ptr) {
     uint32_t fb_base = fb_get_address();
     uint32_t fb_size = fb_get_pitch() * fb_get_height();
+
+    console_write("fb debug: avail=%d base=0x%x size=0x%x pitch=0x%x w=0x%x h=0x%x\n",
+        fb_is_available(), fb_base, fb_size, fb_get_pitch(), fb_get_width(), fb_get_height());
 
     heap_init();
     paging_init(fb_base, fb_size);
