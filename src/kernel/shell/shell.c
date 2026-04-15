@@ -156,6 +156,8 @@ static void ps_write_text_col(const char *text, unsigned int width);
 static void ps_write_int_col(int value, unsigned int width);
 static void ps_write_sep_line(void);
 static void cmd_pspawn(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_findproc(int argc, char argv[][SHELL_MAX_TOKEN]);
+static void cmd_pkill(int argc, char argv[][SHELL_MAX_TOKEN]);
     
 static const shell_command_t commands[] = {
     {"help", "list built-in commands", cmd_help},
@@ -178,9 +180,66 @@ static const shell_command_t commands[] = {
     {"vunmap", "unmap virtual memory: vunmap <virt_addr_dec_or_0xhex>", cmd_unmap},
     {"ps", "show all current running processes", cmd_ps},
     {"pspawn", "spawn a process: spawn <name>", cmd_pspawn},
+    {"pfind", "find porcess by process id: pfind <pid>", cmd_findproc},
+    {"pkill", "kill process by id: pkill <pid>", cmd_pkill},
 };
 
 #define SHELL_COMMAND_COUNT (sizeof(commands) / sizeof(commands[0]))
+
+static void cmd_findproc(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    if (argc != 2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: pfind <pid>\n");
+        return;
+    }
+
+    int pid;
+    if (!parse_uint_arg(argv[1], (unsigned int *)&pid)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid PID\n");
+        return;
+    }
+
+    const process_t *proc = process_find_const(pid);
+    if (!proc) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Process with PID %d not found\n", pid);
+        return;
+    }
+
+    console_write("PID: %d\n", proc->pid);
+    console_write("Name: %s\n", proc->name);
+    console_write("State: %s\n", process_state_name(proc->state));
+    console_write("Parent PID: %d\n", proc->parent_pid);
+}
+
+static void cmd_pkill(int argc, char argv[][SHELL_MAX_TOKEN]) {
+    unsigned int pid_u;
+    int rc;
+
+    if (argc != 2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Usage: pkill <pid>\n");
+        return;
+    }
+
+    if (!parse_uint_arg(argv[1], &pid_u)) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Invalid PID\n");
+        return;
+    }
+
+    rc = process_kill((int)pid_u);
+    if (rc == 0) {
+        console_write("Killed process pid=%d\n", (int)pid_u);
+        return;
+    }
+
+    if (rc == -1) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Process pid=%d not found\n", (int)pid_u);
+    } else if (rc == -2) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Cannot kill protected process pid=%d\n", (int)pid_u);
+    } else if (rc == -3) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Process pid=%d is already ZOMBIE\n", (int)pid_u);
+    } else {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Kill failed for pid=%d rc=%d\n", (int)pid_u, rc);
+    }
+}
 
 static void cmd_pspawn(int argc, char argv[][SHELL_MAX_TOKEN]) {
     if (argc != 2) {
@@ -191,8 +250,12 @@ static void cmd_pspawn(int argc, char argv[][SHELL_MAX_TOKEN]) {
         console_write_colored(CONSOLE_COLOR_ERROR, "Process name cannot be empty\n");
         return;
     }
-    process_create(argv[1], NULL);
-    console_write("Spawned process '%s'\n", argv[1]);
+    int pid = process_create(argv[1], NULL);
+    if (pid < 0) {
+        console_write_colored(CONSOLE_COLOR_ERROR, "Failed to create process '%s'\n", argv[1]);
+        return;
+    }
+    console_write("Spawned process '%s' with PID %d\n", argv[1], pid);
 }
 
 static const char *process_state_name(process_state_t state) {
@@ -732,7 +795,7 @@ static void cmd_clear(int argc, char argv[][SHELL_MAX_TOKEN]) {
     (void)argc;
     (void)argv;
 
-    clear_screen(0x0F);
+    screen_init();
 }
 
 static void cmd_echo(int argc, char argv[][SHELL_MAX_TOKEN]) {

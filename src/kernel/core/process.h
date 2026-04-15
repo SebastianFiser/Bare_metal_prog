@@ -21,8 +21,11 @@ typedef struct process {
 } process_t;
 
 void process_init(void);
-void process_create(const char *name, void (*entry_point)(void));
+int process_create(const char *name, void (*entry_point)(void));
 void get_curr_process(process_t *out);
 process_t *process_get_current(void);
 bool process_set_current(int pid);
 const process_t *process_table_get(size_t *count_out);
+process_t *process_find(int pid);
+const process_t *process_find_const(int pid);
+int process_kill(int pid);

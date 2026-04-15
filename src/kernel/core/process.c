@@ -59,12 +59,13 @@ void process_init(void) {
 	g_current_index = 1;
 }
 
-void process_create(const char *name, void (*entry_point)(void)) {
+int process_create(const char *name, void (*entry_point)(void)) {
 	int slot = process_alloc_slot();
 	int parent_pid;
+    int pid;
 
 	if (slot < 0) {
-		return;
+		return -1;
 	}
 
 	if (g_current_index >= 0) {
@@ -75,6 +76,9 @@ void process_create(const char *name, void (*entry_point)(void)) {
 
 	process_fill(&g_process_table[slot], name, PROCESS_READY, parent_pid, entry_point);
 	g_process_count++;
+
+    pid = g_process_table[slot].pid;
+    return pid;
 }
 
 void get_curr_process(process_t *out) {
@@ -124,13 +128,51 @@ const process_t *process_table_get(size_t *count_out) {
 	return g_process_table;
 }
 
-static const char *process_state_name(process_state_t state) {
-    switch (state) {
-        case PROCESS_NEW: return "NEW";
-        case PROCESS_READY: return "READY";
-        case PROCESS_RUNNING: return "RUNNING";
-        case PROCESS_BLOCKED: return "BLOCKED";
-        case PROCESS_ZOMBIE: return "ZOMBIE";
-        default: return "UNKNOWN";
+process_t *process_find(int pid) {
+    size_t i;
+    for (i = 0; i < g_process_count; i++) {
+        if (g_process_table[i].pid == pid) {
+            return &g_process_table[i];
+        }
     }
+    return NULL;
+}
+
+const process_t *process_find_const(int pid) {
+    return process_find(pid);
+}
+
+int process_kill(int pid) {
+	size_t i;
+	process_t *victim;
+
+    if (pid == 0 || pid == 1) {
+        return -2;
+    }
+
+	victim = process_find(pid);
+	if (victim == NULL) {
+		return -1;
+	}
+
+	if (victim->state == PROCESS_ZOMBIE) {
+		return -3;
+	}
+
+	victim->state = PROCESS_ZOMBIE;
+	victim->stack_top = 0;
+	victim->page_dir_ptr = NULL;
+
+	if (g_current_index >= 0 && g_current_index < (int)PROCESS_MAX && g_process_table[g_current_index].pid == pid) {
+		for (i = 0; i < g_process_count; i++) {
+			if (g_process_table[i].pid >= 0 && g_process_table[i].state == PROCESS_READY) {
+				process_set_current(g_process_table[i].pid);
+				return 0;
+			}
+		}
+
+		g_current_index = -1;
+	}
+
+	return 0;
 }
