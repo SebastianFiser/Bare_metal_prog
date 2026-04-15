@@ -46,7 +46,8 @@
             max-width: min(96vw, 1400px);
             max-height: min(calc(100vh - 80px), 900px);
             width: 100%;
-            height: auto;
+            height: 100%;
+            object-fit: contain;
             image-rendering: pixelated;
             background: #000;
         }
@@ -90,7 +91,6 @@
                     wasm_path: "v86.wasm",
                     memory_size: 2 * 1024 * 1024 * 1024,
                     vga_memory_size: 16 * 1024 * 1024,
-                    screen_scale: 1.35,
                     screen_container: document.getElementById("screen_container"),
                     cdrom: {
                         url: "./os.iso",
