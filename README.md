@@ -3,7 +3,7 @@
 A hobby x86 bare-metal operating system kernel written in C and x86 assembly.
 It boots via GRUB2 (multiboot2), runs entirely in protected mode, and provides a VGA
 text-mode console, a PS/2 keyboard driver, an interactive shell, an in-memory
-filesystem, and a built-in fullscreen text editor called **meowim**.
+filesystem, and a built-in fullscreen text editor called **meowim**, although meowim is not currently working because of migration into picel buffer.
 
 ---
 

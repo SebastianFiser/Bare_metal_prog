@@ -9,6 +9,7 @@
 #include "screen.h"
 #include "paging.h"
 #include "process.h"
+#include "scheduler.h"
 
 static console_state_t vga_boot_state;
 
@@ -194,6 +195,8 @@ void trap_handler_logic(struct registers *regs) {
     }
     else if (regs->int_no == 32) {
         tick_handler();
+        /* allow scheduler to save/restore context using the ISR frame */
+        scheduler_tick(regs);
         outb(0x20, 0x20); // EOI master
         return;
     }

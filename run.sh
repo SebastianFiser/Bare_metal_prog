@@ -45,13 +45,14 @@ gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$HEAP_SRC" -o "$BUILD/heap.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$SCREEN_SRC" -o "$BUILD/screen.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$RENDERER_SRC" -o "$BUILD/renderer.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$ROOT_DIR/src/kernel/core/process.c" -o "$BUILD/process.o"
+gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$ROOT_DIR/src/kernel/core/scheduler.c" -o "$BUILD/scheduler.o"
 gcc -ffreestanding -m32 $INCLUDE_FLAGS -c "$ROOT_DIR/src/kernel/memory/paging.c" -o "$BUILD/paging.o"
 
 
 echo "[3/5] LINK"
 ld -m elf_i386 -T "$LINKER_SCRIPT" -o "$BUILD/$KERNEL" \
     "$BUILD/boot.o" "$BUILD/kernel.o" "$BUILD/common.o" "$BUILD/console.o" "$BUILD/keyboard.o" "$BUILD/shell.o" "$BUILD/input.o" \
-    "$BUILD/filesys.o" "$BUILD/meowim.o" "$BUILD/heap.o" "$BUILD/screen.o" "$BUILD/renderer.o" "$BUILD/paging.o" "$BUILD/process.o"
+    "$BUILD/filesys.o" "$BUILD/meowim.o" "$BUILD/heap.o" "$BUILD/screen.o" "$BUILD/renderer.o" "$BUILD/paging.o" "$BUILD/process.o" "$BUILD/scheduler.o"
 
 echo "[4/5] COPY"
 cp "$BUILD/$KERNEL" "$ISO/boot/"

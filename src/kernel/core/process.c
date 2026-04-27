@@ -1,4 +1,5 @@
 #include "process.h"
+#include "../../memory/heap.h"
 
 static process_t g_process_table[PROCESS_MAX];
 static size_t g_process_count = 0;
@@ -30,12 +31,38 @@ static int process_alloc_slot(void) {
 }
 
 static void process_fill(process_t *p, const char *name, process_state_t state, int parent_pid, void (*entry_point)(void)) {
+	const size_t default_stack = 0x4000; // 16 KiB
 	p->pid = g_next_pid++;
 	process_name_copy(p->name, name);
 	p->state = state;
 	p->parent_pid = parent_pid;
-	p->stack_top = (uint32_t)entry_point;
 	p->page_dir_ptr = NULL;
+
+	p->stack = NULL;
+	p->stack_size = 0;
+
+		if (entry_point != NULL) {
+		if (p->stack != NULL) {
+			p->stack_size = default_stack;
+			/* prepare initial saved register frame so a context-restore will start at entry_point */
+			/* zero registers */
+			for (size_t i = 0; i < sizeof(struct registers); i++) {
+				((uint8_t *)&p->saved_regs)[i] = 0;
+			}
+			p->saved_regs.eip = (uint32_t)entry_point;
+			p->saved_regs.cs = 0x08; /* kernel code segment */
+			p->saved_regs.eflags = 0x202;
+			/* set useresp to top of allocated stack (grow-down) */
+			p->saved_regs.useresp = (uint32_t)p->stack + (uint32_t)p->stack_size - 4;
+			p->saved_regs.ss = 0x10; /* kernel data segment */
+		}
+	}
+}
+
+static void idle_proc(void) {
+	while(1) {
+		__asm__ volatile ("hlt");
+	}
 }
 
 void process_init(void) {
@@ -49,11 +76,16 @@ void process_init(void) {
 		g_process_table[i].name[0] = '\0';
 		g_process_table[i].state = PROCESS_ZOMBIE;
 		g_process_table[i].parent_pid = -1;
-		g_process_table[i].stack_top = 0;
+		g_process_table[i].stack = NULL;
+		g_process_table[i].stack_size = 0;
 		g_process_table[i].page_dir_ptr = NULL;
+		/* zero saved regs */
+		for (size_t j = 0; j < sizeof(struct registers); j++) {
+			((uint8_t *)&g_process_table[i].saved_regs)[j] = 0;
+		}
 	}
 
-	process_fill(&g_process_table[0], "idle", PROCESS_READY, -1, NULL);
+	process_fill(&g_process_table[0], "idle", PROCESS_READY, -1, idle_proc);
 	process_fill(&g_process_table[1], "kernel", PROCESS_RUNNING, 0, NULL);
 	g_process_count = 2;
 	g_current_index = 1;
@@ -91,7 +123,8 @@ void get_curr_process(process_t *out) {
 		out->name[0] = '\0';
 		out->state = PROCESS_ZOMBIE;
 		out->parent_pid = -1;
-		out->stack_top = 0;
+		out->stack = NULL;
+		out->stack_size = 0;
 		out->page_dir_ptr = NULL;
 		return;
 	}
@@ -138,6 +171,43 @@ process_t *process_find(int pid) {
     return NULL;
 }
 
+void process_save_current_regs(struct registers *regs) {
+	if (g_current_index < 0 || g_current_index >= (int)PROCESS_MAX || regs == NULL) return;
+	g_process_table[g_current_index].saved_regs = *regs;
+}
+
+void process_restore_regs_for_index(int index, struct registers *out_regs) {
+	if (index < 0 || index >= (int)PROCESS_MAX || out_regs == NULL) return;
+	*out_regs = g_process_table[index].saved_regs;
+}
+
+int process_get_next_ready_index(void) {
+	if (g_process_count == 0) return -1;
+	int start = g_current_index;
+	int i = start;
+	for (size_t cnt = 0; cnt < g_process_count; cnt++) {
+		i = (i + 1) % (int)g_process_count;
+		if (g_process_table[i].pid >= 0 && g_process_table[i].state == PROCESS_READY) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+int process_get_current_index(void) {
+	return g_current_index;
+}
+
+bool process_set_current_index(int index) {
+	if (index < 0 || index >= (int)PROCESS_MAX) return false;
+	if (g_current_index >= 0 && g_current_index < (int)PROCESS_MAX && g_process_table[g_current_index].pid != -1 && g_process_table[g_current_index].state == PROCESS_RUNNING) {
+		g_process_table[g_current_index].state = PROCESS_READY;
+	}
+	g_current_index = index;
+	g_process_table[index].state = PROCESS_RUNNING;
+	return true;
+}
+
 const process_t *process_find_const(int pid) {
     return process_find(pid);
 }
@@ -146,9 +216,9 @@ int process_kill(int pid) {
 	size_t i;
 	process_t *victim;
 
-    if (pid == 0 || pid == 1) {
-        return -2;
-    }
+	if (pid == 0 || pid == 1) {
+		return -2;
+	}
 
 	victim = process_find(pid);
 	if (victim == NULL) {
@@ -160,7 +230,10 @@ int process_kill(int pid) {
 	}
 
 	victim->state = PROCESS_ZOMBIE;
-	victim->stack_top = 0;
+	victim->esp = 0;
+	victim->ebp = 0;
+	victim->stack = NULL;
+	victim->stack_size = 0;
 	victim->page_dir_ptr = NULL;
 
 	if (g_current_index >= 0 && g_current_index < (int)PROCESS_MAX && g_process_table[g_current_index].pid == pid) {
